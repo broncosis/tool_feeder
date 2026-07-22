@@ -1,0 +1,8 @@
+[gcode_button t@@N@@_unload_button]
+pin: CHANGE_ME_t@@N@@_unload_button_pin
+press_gcode:
+    UPDATE_DELAYED_GCODE ID=_t@@N@@_unload_debounce DURATION=0.5
+
+[delayed_gcode _t@@N@@_unload_debounce]
+gcode:
+    UNLOAD_ANY_TOOL T=@@N@@ D=1400 S=30  # 1400mm is a reasonable default Bowden length — adjust to match your tube

@@ -1,0 +1,4 @@
+.claude/
+src/sync/venv/
+src/sync/.env
+**/__pycache__/

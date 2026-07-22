@@ -1,0 +1,17 @@
+# ---- Tool @@N@@ -------------------------------------------------------------
+
+[extruder_stepper _tool@@N@@_feeder]
+extruder: @@EXTRUDER@@
+step_pin: CHANGE_ME_t@@N@@_step_pin
+dir_pin: CHANGE_ME_t@@N@@_dir_pin
+enable_pin: CHANGE_ME_t@@N@@_enable_pin
+microsteps: 16
+full_steps_per_rotation: 200
+gear_ratio: 50:17
+rotation_distance: 22.319100012672
+
+[tmc2208 extruder_stepper _tool@@N@@_feeder]
+uart_pin: CHANGE_ME_t@@N@@_uart_pin
+run_current: .5
+hold_current: .05
+stealthchop_threshold: 250

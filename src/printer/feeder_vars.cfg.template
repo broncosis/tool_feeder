@@ -1,0 +1,27 @@
+
+# -----------------------------------------------------------------------------
+# Feeder settings — shared by all load/unload macros (tool_feeder_macros.cfg)
+#
+# This is the ONLY place bucket position, temps, and tuning live. Edit these
+# to match your setup. tool_feeder_macros.cfg contains no hardware- or setup-specific
+# values, so it's safe to overwrite/update on its own without touching
+# anything you've tuned here.
+# -----------------------------------------------------------------------------
+
+[gcode_macro _FEEDER_VARS]
+variable_bucket_x:        25  # X position of purge bucket — reasonable default, adjust to your machine
+variable_bucket_y:        -4  # Y position of purge bucket — reasonable default, adjust to your machine
+variable_load_temp:      @@LOAD_TEMP@@  # temperature to load/unload/purge at
+variable_load_purge:     150  # mm to purge after filament reaches toolhead (load macros)
+variable_unload_purge:   100  # mm to retract after tip shaping to clear the nozzle
+variable_feed_step:       10  # step size passed to _FILAMENT_FEED loop (mm)
+variable_wiggle_init:     10  # initial retract before oscillating (mm)
+variable_wiggle_dist:      5  # push/pull oscillation distance (mm)
+variable_wiggle_passes:    3  # number of oscillation cycles
+variable_wiggle_speed:   500  # feedrate for wiggle moves (mm/min, ~8mm/s)
+variable_tip_slow_dist:    5  # mm to retract slowly to form the tip
+variable_tip_slow_speed: 300  # F value for slow phase (~5mm/s)
+variable_tip_fast_dist:   40  # mm to retract fast to escape the heatbreak zone
+variable_tip_fast_speed: 3600 # F value for fast phase (~60mm/s)
+variable_spoolman_enabled: @@SPOOLMAN_ENABLED@@  # set False if you don't run Moonraker/Spoolman — skips SET_ACTIVE_SPOOL in _TOOL_ROUTER
+gcode:
