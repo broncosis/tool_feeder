@@ -76,16 +76,14 @@ class _BufferBase:
         self.feeder = self.printer.lookup_object(
             'extruder_stepper ' + self.feeder_name)
         self.base_rd, self.steps_per_rot = \
-            self.feeder.stepper.get_rotation_distance()
-
-        self._register_sensors()
+            self.feeder.extruder_stepper.stepper.get_rotation_distance()
 
         if self.fault_dist is not None:
             self.last_steps = self._feeder_steps()
             reactor = self.printer.get_reactor()
             reactor.register_timer(self._jam_check, reactor.monotonic() + 1.)
 
-    def _register_sensors(self):
+    def _register_sensors(self, config):
         raise NotImplementedError
 
     def _stuck_sensor_label(self):
@@ -96,10 +94,10 @@ class _BufferBase:
     # -------------------------------------------------------------------------
 
     def _set_rd(self, rd):
-        self.feeder.stepper.rotation_dist = rd
+        self.feeder.extruder_stepper.stepper.rotation_dist = rd
 
     def _feeder_steps(self):
-        mcu_stepper = getattr(self.feeder.stepper, '_mcu_stepper', None)
+        mcu_stepper = getattr(self.feeder.extruder_stepper.stepper, '_mcu_stepper', None)
         if mcu_stepper is None:
             return 0
         return mcu_stepper.get_commanded_position()
@@ -145,7 +143,7 @@ class _BufferBase:
     # -------------------------------------------------------------------------
 
     def cmd_QUERY_BUFFER(self, gcmd):
-        rd = self.feeder.stepper.rotation_dist
+        rd = self.feeder.extruder_stepper.stepper.rotation_dist
         gcmd.respond_info(
             "Buffer %s  state=%s  rotation_distance=%.6f  base=%.6f"
             % (self.name, self.state, rd, self.base_rd))
@@ -155,7 +153,7 @@ class _BufferBase:
         self._set_rd(self.base_rd * factor)
         gcmd.respond_info(
             "Buffer %s  rotation_distance=%.6f  factor=%.4f"
-            % (self.name, self.feeder.stepper.rotation_dist, factor))
+            % (self.name, self.feeder.extruder_stepper.stepper.rotation_dist, factor))
 
     def cmd_SET_BUFFER_MULTIPLIER(self, gcmd):
         which  = gcmd.get('MULTIPLIER').upper()
@@ -187,8 +185,10 @@ class DualSensorBuffer(_BufferBase):
         self.adv_state = False   # True when advance pin active (buffer expanded)
         self.trl_state = False   # True when trailing pin active (buffer compressed)
 
-    def _register_sensors(self):
-        buttons = self.printer.lookup_object('buttons')
+        self._register_sensors(config)
+
+    def _register_sensors(self, config):
+        buttons = self.printer.load_object(config, 'buttons')
         buttons.register_buttons([self.advance_pin],  self._advance_handler)
         buttons.register_buttons([self.trailing_pin], self._trailing_handler)
 
@@ -249,8 +249,10 @@ class BelaySensorBuffer(_BufferBase):
 
         self.sensor_state = False  # True when sensor active (post-inversion)
 
-    def _register_sensors(self):
-        buttons = self.printer.lookup_object('buttons')
+        self._register_sensors(config)
+
+    def _register_sensors(self, config):
+        buttons = self.printer.load_object(config, 'buttons')
         buttons.register_buttons([self.sensor_pin], self._sensor_handler)
 
     def _sensor_handler(self, eventtime, state):

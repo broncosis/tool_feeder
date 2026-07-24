@@ -71,6 +71,13 @@ UUIDs, dock park position, input shaper tuning — comes out as clearly marked
 grep -rn CHANGE_ME_ ~/printer_data/config/feeder.cfg ~/printer_data/config/T*.cfg
 ```
 
+Re-running the installer never silently overwrites `feeder.cfg` or a `T{n}.cfg`
+you already have — it backs the old one up first (`feeder.cfg.bak.<timestamp>`,
+next to the original), then offers to carry over any real values you already
+filled in (pins, `canbus_uuid`, dock position, etc.) into the newly generated
+file, so re-running to change one setting doesn't mean re-entering everything
+else from scratch.
+
 For KlipperScreen: if Spoolman isn't installed, the panel's "Assign" button
 goes straight to a manual color/material picker instead of a Spoolman browser
 — pick a color from a preset swatch grid (or a custom color picker) and a

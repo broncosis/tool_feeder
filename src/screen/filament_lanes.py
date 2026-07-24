@@ -138,7 +138,7 @@ class Panel(ScreenPanel):
 
         # Fetch save_variables + toolchanger state via synchronous REST.
         # KlipperScreen uses the same pattern for its own periodic fetches.
-        result = self._screen.apiclient.send_request(
+        result = self._screen.restApi.send_request(
             "printer/objects/query?save_variables&toolchanger"
         )
         variables = {}
@@ -179,46 +179,56 @@ class Panel(ScreenPanel):
             for n in range(tool_count)
         }
 
-        resolved = set()
-        if spool_ids:
-            spools = self._screen.spoolman_api.load_all_spools()
-            if spools and isinstance(spools, list):
-                spool_by_id = {s["id"]: s for s in spools if "id" in s}
-                for n, sid in spool_ids.items():
-                    if sid not in spool_by_id:
-                        continue
-                    fields = extract_spool_fields(spool_by_id[sid])
+        def _apply_manual_fallback(resolved):
+            # Lanes not resolved via Spoolman (no spool_id set, spool_id set
+            # but Spoolman unreachable/deleted, or Spoolman not installed at
+            # all) fall back to a manual color/material assignment made via
+            # the filament_lanes_manual panel, stored as t{n}__manual. No API
+            # call needed — the dict is used directly.
+            for n in range(tool_count):
+                if n in resolved:
+                    continue
+                manual = variables.get(f"t{n}__manual")
+                if isinstance(manual, dict):
                     self.lane_data[str(n)] = {
-                        "name":             fields["name"],
-                        "material":         fields["material"],
-                        "vendor":           fields["vendor"],
-                        "color":            fields["color_hex"],
-                        "spool_id":         fields["spool_id"],
-                        "remaining_weight": fields["remaining_weight"],
+                        "name":     manual.get("name", "") or "",
+                        "material": manual.get("material", "") or "",
+                        "vendor":   "",
+                        "color":    manual.get("color", "") or "",
                     }
-                    resolved.add(n)
 
-        # Fallback: lanes not resolved via Spoolman (no spool_id set, spool_id
-        # set but Spoolman unreachable/deleted, or Spoolman not installed at
-        # all) fall back to a manual color/material assignment made via the
-        # filament_lanes_manual panel, stored as t{n}__manual. No API call
-        # needed — the dict is used directly.
-        for n in range(tool_count):
-            if n in resolved:
-                continue
-            manual = variables.get(f"t{n}__manual")
-            if isinstance(manual, dict):
-                self.lane_data[str(n)] = {
-                    "name":     manual.get("name", "") or "",
-                    "material": manual.get("material", "") or "",
-                    "vendor":   "",
-                    "color":    manual.get("color", "") or "",
-                }
+            if changed_tool_count:
+                self._build_ui()
+            else:
+                self._update_all_lanes()
 
-        if changed_tool_count:
-            self._build_ui()
+        if spool_ids:
+            # load_all_spools() is async (a Moonraker JSON-RPC call under the
+            # hood) — it returns immediately with None, the real list arrives
+            # later via this callback.
+            def _handle_spools(spools):
+                resolved = set()
+                if spools and isinstance(spools, list):
+                    spool_by_id = {s["id"]: s for s in spools if "id" in s}
+                    for n, sid in spool_ids.items():
+                        if sid not in spool_by_id:
+                            continue
+                        fields = extract_spool_fields(spool_by_id[sid])
+                        self.lane_data[str(n)] = {
+                            "name":             fields["name"],
+                            "material":         fields["material"],
+                            "vendor":           fields["vendor"],
+                            "color":            fields["color_hex"],
+                            "spool_id":         fields["spool_id"],
+                            "remaining_weight": fields["remaining_weight"],
+                        }
+                        resolved.add(n)
+                _apply_manual_fallback(resolved)
+
+            self._screen.spoolman_api.load_all_spools(callback=_handle_spools)
         else:
-            self._update_all_lanes()
+            _apply_manual_fallback(set())
+
         return False  # stop GLib.idle_add from repeating
 
     def _on_refresh_timer(self):
@@ -555,7 +565,7 @@ class Panel(ScreenPanel):
         # forcing everyone through Spoolman (or vice versa).
         dialog = Gtk.Dialog(
             title=_("Assign Spool"),
-            transient_for=self.get_toplevel(),
+            transient_for=self._screen,
             flags=Gtk.DialogFlags.MODAL,
         )
         dialog.add_button(_("Browse Spoolman"), 1)

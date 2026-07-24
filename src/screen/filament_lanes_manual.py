@@ -197,7 +197,7 @@ class Panel(ScreenPanel):
         self._color_preview.queue_draw()
 
     def _on_custom_color_clicked(self, widget):
-        dialog = Gtk.ColorChooserDialog(title=_("Choose a color"), transient_for=self.get_toplevel())
+        dialog = Gtk.ColorChooserDialog(title=_("Choose a color"), transient_for=self._screen)
         if self.selected_color:
             r, g, b = self._hex_to_rgb(self.selected_color)
             rgba = Gdk.RGBA(r, g, b, 1.0)

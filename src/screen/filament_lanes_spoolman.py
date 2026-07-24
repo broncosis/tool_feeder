@@ -103,13 +103,18 @@ class Panel(ScreenPanel):
     # ------------------------------------------------------------------ #
 
     def _fetch_spools(self):
-        spools = self._screen.spoolman_api.load_all_spools()
-        if not spools or not isinstance(spools, list):
-            logger.warning("filament_lanes_spoolman: spool fetch returned nothing")
-            GLib.idle_add(self._show_error, _("Could not fetch spool list."))
-            return
-        self.spools = spools
-        GLib.idle_add(self._populate_list)
+        # load_all_spools() is async (a Moonraker JSON-RPC call under the
+        # hood) — it returns immediately with None, the real list arrives
+        # later via this callback.
+        def _handle_spools(spools):
+            if not spools or not isinstance(spools, list):
+                logger.warning("filament_lanes_spoolman: spool fetch returned nothing")
+                GLib.idle_add(self._show_error, _("Could not fetch spool list."))
+                return
+            self.spools = spools
+            GLib.idle_add(self._populate_list)
+
+        self._screen.spoolman_api.load_all_spools(callback=_handle_spools)
 
     def _populate_list(self):
         self._listbox.remove(self._spinner_row)

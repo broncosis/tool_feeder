@@ -221,24 +221,106 @@ _detect_tool_count() {
 
 # ---- Mutating helpers (DRY_RUN-aware) ---------------------------------------
 
+# _backup_existing <dest>
+# Renames an existing file out of the way (timestamped, never clobbers a
+# prior backup) instead of letting it get silently overwritten. Prints the
+# backup path, or nothing if there was no existing file.
+_backup_existing() {
+    local dest="$1" backup
+    [ -f "$dest" ] || return 0
+    backup="${dest}.bak.$(date +%Y%m%d-%H%M%S)"
+    cp "$dest" "$backup"
+    echo "$backup"
+}
+
+# _merge_old_values <old_file> <new_file>
+# Carries real (non-CHANGE_ME_) values from old_file into new_file wherever
+# the same [section] + key exists in both — so re-running the installer
+# doesn't wipe out wiring you already filled in. Matches by section+key, not
+# by placeholder text, since a filled-in value no longer contains
+# "CHANGE_ME_" for this script to spot. New file's inline comment (if any)
+# is kept; only the value itself is swapped. No-ops quietly if python3 is
+# unavailable — the freshly generated file is used as-is in that case.
+_merge_old_values() {
+    local old_file="$1" new_file="$2"
+    command -v python3 >/dev/null 2>&1 || return 0
+    python3 - "$old_file" "$new_file" <<'PYEOF'
+import re
+import sys
+
+old_path, new_path = sys.argv[1], sys.argv[2]
+kv_re = re.compile(r'^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:\s*)(.*)$')
+
+
+def parse_values(path):
+    values = {}
+    section = None
+    with open(path) as f:
+        for line in f:
+            stripped = line.rstrip("\n")
+            if stripped.startswith("["):
+                section = stripped.strip()
+                continue
+            m = kv_re.match(stripped)
+            if not m:
+                continue
+            key = m.group(2)
+            value = m.group(4).split("#", 1)[0].strip()
+            if value and not value.startswith("CHANGE_ME_"):
+                values[(section, key)] = value
+    return values
+
+
+old_values = parse_values(old_path)
+
+section = None
+out_lines = []
+with open(new_path) as f:
+    for line in f:
+        stripped = line.rstrip("\n")
+        if stripped.startswith("["):
+            section = stripped.strip()
+            out_lines.append(line)
+            continue
+        m = kv_re.match(stripped)
+        if m:
+            indent, key, sep, rest = m.groups()
+            old_val = old_values.get((section, key))
+            if old_val is not None:
+                if "#" in rest:
+                    _, comment = rest.split("#", 1)
+                    new_rest = f"{old_val}  #{comment}"
+                else:
+                    new_rest = old_val
+                out_lines.append(f"{indent}{key}{sep}{new_rest}\n")
+                continue
+        out_lines.append(line)
+
+with open(new_path, "w") as f:
+    f.writelines(out_lines)
+PYEOF
+}
+
 # copy_with_prompt <src> <dest_dir>
 copy_with_prompt() {
-    local src="$1" dest_dir="$2" name dest
+    local src="$1" dest_dir="$2" name dest backup
     [ -f "$src" ] || { log_warn "Not found, skipping: $(basename "$src")"; return; }
     name="$(basename "$src")"
     dest="$dest_dir/$name"
 
     if [ -f "$dest" ]; then
-        if ! confirm "  '$name' already exists — overwrite?" "n"; then
+        if ! confirm "  '$name' already exists — replace it?" "n"; then
             log_info "Skipped: $name"
             return
         fi
     fi
 
     if [ "${DRY_RUN:-0}" = "1" ]; then
-        log_info "[dry-run] would copy $src -> $dest"
+        log_info "[dry-run] would back up existing $dest (if any) and copy $src -> $dest"
         return
     fi
+    backup="$(_backup_existing "$dest")"
+    [ -n "$backup" ] && log_info "Backed up existing '$name' to $(basename "$backup")"
     mkdir -p "$dest_dir"
     cp "$src" "$dest"
     log_ok "Installed: $dest"
@@ -248,14 +330,29 @@ copy_with_prompt() {
 # Like copy_with_prompt, but for a file generated from a template rather
 # than copied verbatim — dest is a full path, not a directory, since
 # generated filenames (T0.cfg, T1.cfg, ...) don't match the template's name.
+# Never silently overwrites: an existing file is backed up (renamed, never
+# clobbered), and if you want, real values already filled in there (pins,
+# canbus_uuid, dock position, etc. — anything that's no longer a CHANGE_ME_
+# placeholder) get carried over into the newly generated file.
 write_generated_with_prompt() {
-    local tmp_file="$1" dest="$2" name
+    local tmp_file="$1" dest="$2" name backup
     name="$(basename "$dest")"
 
     if [ -f "$dest" ]; then
-        if ! confirm "  '$name' already exists — overwrite?" "n"; then
+        if ! confirm "  '$name' already exists — replace it?" "n"; then
             log_info "Skipped: $name"
             return
+        fi
+
+        if [ "${DRY_RUN:-0}" = "1" ]; then
+            log_info "[dry-run] would back up existing $dest and write a new one"
+        else
+            backup="$(_backup_existing "$dest")"
+            log_info "Backed up existing '$name' to $(basename "$backup")"
+            if confirm "  Carry over values already filled in at '$name' into the new file?" "y"; then
+                _merge_old_values "$backup" "$tmp_file"
+                log_ok "Carried over existing values where the new file still had a placeholder."
+            fi
         fi
     fi
 
