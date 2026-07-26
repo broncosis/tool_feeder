@@ -5,6 +5,7 @@ import logging
 import os
 
 from panels.base_panel import ScreenPanel
+from panels.touch_picker import pick_from_list
 
 logger = logging.getLogger("KlipperScreen")
 
@@ -88,15 +89,18 @@ class Panel(ScreenPanel):
         lane_lbl.set_halign(Gtk.Align.START)
         root.pack_start(lane_lbl, False, False, 0)
 
-        # ── Material dropdown ──────────────────────────────────────────
+        # ── Material picker ─────────────────────────────────────────────
         root.pack_start(Gtk.Label(label=_("Material"), halign=Gtk.Align.START), False, False, 0)
 
-        self._material_combo = Gtk.ComboBoxText()
-        for material in _load_materials():
-            self._material_combo.append_text(material)
-        self._material_combo.set_active(0)
-        self._material_combo.connect("changed", self._on_material_changed)
-        root.pack_start(self._material_combo, False, False, 0)
+        # A tap-to-open list dialog, not Gtk.ComboBoxText — see
+        # touch_picker.py for why ComboBoxText's popup doesn't survive a
+        # touchscreen tap under KlipperScreen's window-manager-less Xorg.
+        self._material_options = _load_materials()
+        self._material_idx = 0
+        self._material_btn = Gtk.Button(label=self._material_options[0])
+        self._material_btn.set_halign(Gtk.Align.FILL)
+        self._material_btn.connect("clicked", self._on_pick_material)
+        root.pack_start(self._material_btn, True, True, 0)
 
         self._other_entry = Gtk.Entry()
         self._other_entry.set_placeholder_text(_("Enter material"))
@@ -135,8 +139,14 @@ class Panel(ScreenPanel):
         root.pack_start(self._name_entry, False, False, 0)
 
         # ── Actions ──────────────────────────────────────────────────────
+        route_btn = self._gtk.Button("toolchanger", _("Map / Failover"), "color3")
+        route_btn.set_size_request(-1, 34)
+        route_btn.connect("clicked", self._on_routing_clicked)
+        root.pack_start(route_btn, False, False, 0)
+
         action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         clear_btn = self._gtk.Button("cancel", _("Clear"), "color2")
+        clear_btn.set_size_request(-1, 34)
         clear_btn.connect("clicked", self._on_clear)
         action_box.pack_start(clear_btn, True, True, 0)
 
@@ -145,7 +155,16 @@ class Panel(ScreenPanel):
         action_box.pack_start(save_btn, True, True, 0)
         root.pack_start(action_box, False, False, 0)
 
-        self.content.pack_start(root, True, True, 0)
+        # This panel has more controls (material, color grid, name, routing,
+        # clear/save) than fit in KlipperScreen's 480px screen height at
+        # once — without scrolling, Name/Map-Failover/Clear/Save all land
+        # off-screen and are untappable. Same fix pattern as the toolmap
+        # diagram's horizontal scroll in filament_lanes_toolmap.py.
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.add(root)
+
+        self.content.pack_start(scroll, True, True, 0)
         self.content.show_all()
 
         # Default selection: first preset, so Save always has a valid color.
@@ -212,18 +231,25 @@ class Panel(ScreenPanel):
         dialog.destroy()
 
     # ------------------------------------------------------------------ #
-    # Material dropdown                                                    #
+    # Material picker                                                       #
     # ------------------------------------------------------------------ #
 
-    def _on_material_changed(self, widget):
-        is_other = widget.get_active_text() == "Other"
+    def _on_pick_material(self, widget):
+        idx = pick_from_list(self._screen, _("Material"), self._material_options, self._material_idx)
+        if idx is not None:
+            self._material_idx = idx
+            self._material_btn.set_label(self._material_options[idx])
+            self._on_material_changed()
+
+    def _on_material_changed(self):
+        is_other = self._material_options[self._material_idx] == "Other"
         self._other_entry.set_visible(is_other)
         self._other_entry.set_no_show_all(not is_other)
         if is_other:
             self._other_entry.show()
 
     def _selected_material(self):
-        text = self._material_combo.get_active_text() or ""
+        text = self._material_options[self._material_idx] if self._material_options else ""
         if text == "Other":
             return self._other_entry.get_text().strip()
         return text
@@ -236,6 +262,25 @@ class Panel(ScreenPanel):
         script = f"SAVE_VARIABLE VARIABLE=t{self.lane}__manual VALUE=None"
         self._screen._send_action(None, "printer.gcode.script", {"script": script})
         self._screen._menu_go_back()
+
+    def _on_routing_clicked(self, widget):
+        self._screen.show_panel(
+            "filament_lanes_routing",
+            panel_name=f"filament_lanes_routing_{self.lane}",
+            title=_(f"T{self.lane} Routing"),
+            lane=self.lane,
+        )
+
+    @staticmethod
+    def _gcode_value(py_value):
+        # Klipper's extended-param parser (gcode.py's _get_extended_params)
+        # tokenizes the line with shlex before SAVE_VARIABLE's own
+        # ast.literal_eval — a bare dict repr()'s spaces/quotes split into
+        # bogus tokens ("Malformed command"). A shlex-escaped double-quote
+        # wrapper makes the whole repr one token again.
+        text = repr(py_value)
+        escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+        return '"' + escaped + '"'
 
     def _on_save(self, widget):
         material = self._selected_material()
@@ -254,7 +299,7 @@ class Panel(ScreenPanel):
         # instead of t{n}__spool_id, and clears spool_id/spool_id-variable
         # so a stale Spoolman assignment can't take precedence.
         script = (
-            f"SAVE_VARIABLE VARIABLE=t{self.lane}__manual VALUE={entry!r}\n"
+            f"SAVE_VARIABLE VARIABLE=t{self.lane}__manual VALUE={self._gcode_value(entry)}\n"
             f"SAVE_VARIABLE VARIABLE=t{self.lane}__spool_id VALUE=None\n"
             f"SET_GCODE_VARIABLE MACRO=T{self.lane} VARIABLE=spool_id VALUE=None"
         )

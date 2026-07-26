@@ -497,11 +497,29 @@ class Panel(ScreenPanel):
             self._extra_bar_btns.append(btn)
         action_bar.show_all()
 
+        # Filament Lanes doesn't need the notification/shutdown shortcuts
+        # cluttering the sidebar. Hidden here rather than in each
+        # sub-panel (manual/spoolman/routing/toolmap) so the toggle only
+        # happens once, on real entry/exit of the whole section —
+        # deactivate() below only fires when this panel itself leaves the
+        # panel stack, not when a child panel does (KlipperScreen's
+        # _remove_current_panel calls deactivate() only on the panel
+        # actually being popped). Must run after action_bar.show_all()
+        # above: "shortcut" has no no_show_all guard, so show_all() would
+        # otherwise re-show it.
+        control = self._screen.base_panel.control
+        control["shortcut"].hide()
+        control["shutdown"].hide()
+
     def deactivate(self):
         action_bar = self._screen.base_panel.action_bar
         for btn in self._extra_bar_btns:
             action_bar.remove(btn)
         self._extra_bar_btns.clear()
+
+        control = self._screen.base_panel.control
+        control["shortcut"].show()
+        control["shutdown"].show()
 
     # ------------------------------------------------------------------ #
     # Button handlers                                                      #

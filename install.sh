@@ -698,10 +698,12 @@ install_klipperscreen_panel() {
     ks_panels="$ks_dir/panels"
     log_info "Found KlipperScreen panels at: $ks_panels"
 
-    # spoolman_common.py is a shared module the two Spoolman-aware panels
-    # import as a sibling — it needs to be symlinked alongside them, not
-    # just the three Panel files.
-    for f in filament_lanes.py filament_lanes_spoolman.py filament_lanes_manual.py spoolman_common.py; do
+    # spoolman_common.py, tool_routing.py, and touch_picker.py are shared
+    # modules imported as siblings by the actual Panel files — they need to
+    # be symlinked alongside them too, not just the Panel files themselves.
+    for f in filament_lanes.py filament_lanes_spoolman.py filament_lanes_manual.py \
+             filament_lanes_routing.py filament_lanes_toolmap.py \
+             spoolman_common.py tool_routing.py touch_picker.py; do
         symlink_with_warning "$SCREEN_SRC/$f" "$ks_panels/$f"
     done
 

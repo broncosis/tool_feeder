@@ -60,8 +60,14 @@ class Panel(ScreenPanel):
         left.pack_start(cur_lbl, False, False, 0)
 
         clear_btn = self._gtk.Button("cancel", _("Clear"), "color2")
+        clear_btn.set_size_request(-1, 34)
         clear_btn.connect("clicked", self._on_clear)
         left.pack_start(clear_btn, False, False, 0)
+
+        route_btn = self._gtk.Button("toolchanger", _("Map / Failover"), "color3")
+        route_btn.set_size_request(-1, 34)
+        route_btn.connect("clicked", self._on_routing_clicked)
+        left.pack_start(route_btn, False, False, 0)
 
         root.pack_start(left, False, False, 0)
 
@@ -218,6 +224,14 @@ class Panel(ScreenPanel):
 
     def _on_clear(self, widget):
         self._assign(0)  # 0 = no spool assigned
+
+    def _on_routing_clicked(self, widget):
+        self._screen.show_panel(
+            "filament_lanes_routing",
+            panel_name=f"filament_lanes_routing_{self.lane}",
+            title=_(f"T{self.lane} Routing"),
+            lane=self.lane,
+        )
 
     def _assign(self, spool_id):
         # Write to Klipper save_variables so the assignment persists across
