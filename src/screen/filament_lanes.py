@@ -6,6 +6,7 @@ import os
 
 from panels.base_panel import ScreenPanel
 from panels.spoolman_common import extract_spool_fields
+from panels.sidebar_declutter import hide_extra_icons, show_extra_icons
 
 logger = logging.getLogger("KlipperScreen")
 
@@ -27,6 +28,14 @@ _FALLBACK_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100
 _CSS_INJECTED = False
 _INDICATOR_CSS = b"""
 .lane-active-indicator { background-color: #CC0000; }
+/* base.css gives every .colorN button a thick (.4em) colored bottom
+   border. Fine at normal size elsewhere in the app, but the sidebar's
+   Clean Nozzle/Unselect Tool/Tool Map buttons are already tight on
+   vertical room, so drop it just for the action_bar sidebar. */
+.action_bar button.color1,
+.action_bar button.color2,
+.action_bar button.color3,
+.action_bar button.color4 { border-bottom: 0; }
 """
 
 
@@ -490,26 +499,36 @@ class Panel(ScreenPanel):
     def activate(self):
         self._fetch_data()
         action_bar = self._screen.base_panel.action_bar
+        # Smaller than KlippyGtk's own default (button_image_scale=1.38),
+        # but with the vexpand/spacing fixes above there's room to size
+        # these up a bit from the initial 0.85. vexpand=False so these take
+        # only their natural size instead of sharing out the action_bar's
+        # full 480px height as blank padding (KlippyGtk.Button() always
+        # constructs with vexpand=True).
         for macro, label, icon, style in self._action_buttons:
-            btn = self._gtk.Button(icon, _(label), style)
+            btn = self._gtk.Button(icon, _(label), style, scale=1.0)
+            btn.set_vexpand(False)
             btn.connect("clicked", self._on_action_btn_clicked, macro)
             action_bar.add(btn)
             self._extra_bar_btns.append(btn)
+
+        # Persistent sidebar shortcut to the all-tools mapping diagram —
+        # reachable from anywhere in the Filament section (not just a
+        # specific lane's Routing page), and avoids relying on any
+        # in-panel scrolling, which some touchscreens handle poorly.
+        toolmap_btn = self._gtk.Button("network", _("Tool Map"), "color4", scale=1.0)
+        toolmap_btn.set_vexpand(False)
+        toolmap_btn.connect("clicked", self._on_toolmap_btn_clicked)
+        action_bar.add(toolmap_btn)
+        self._extra_bar_btns.append(toolmap_btn)
+
         action_bar.show_all()
 
         # Filament Lanes doesn't need the notification/shutdown shortcuts
-        # cluttering the sidebar. Hidden here rather than in each
-        # sub-panel (manual/spoolman/routing/toolmap) so the toggle only
-        # happens once, on real entry/exit of the whole section —
-        # deactivate() below only fires when this panel itself leaves the
-        # panel stack, not when a child panel does (KlipperScreen's
-        # _remove_current_panel calls deactivate() only on the panel
-        # actually being popped). Must run after action_bar.show_all()
-        # above: "shortcut" has no no_show_all guard, so show_all() would
-        # otherwise re-show it.
-        control = self._screen.base_panel.control
-        control["shortcut"].hide()
-        control["shutdown"].hide()
+        # cluttering the sidebar — see sidebar_declutter.py for why every
+        # filament panel (not just this entry one) needs its own
+        # hide/show pair in activate()/deactivate().
+        hide_extra_icons(self._screen)
 
     def deactivate(self):
         action_bar = self._screen.base_panel.action_bar
@@ -517,9 +536,7 @@ class Panel(ScreenPanel):
             action_bar.remove(btn)
         self._extra_bar_btns.clear()
 
-        control = self._screen.base_panel.control
-        control["shortcut"].show()
-        control["shutdown"].show()
+        show_extra_icons(self._screen)
 
     # ------------------------------------------------------------------ #
     # Button handlers                                                      #
@@ -566,6 +583,14 @@ class Panel(ScreenPanel):
     def _on_action_btn_clicked(self, widget, macro):
         self._screen._send_action(widget, "printer.gcode.script",
                                   {"script": macro})
+
+    def _on_toolmap_btn_clicked(self, widget):
+        self._screen.show_panel(
+            "filament_lanes_toolmap",
+            panel_name="filament_lanes_toolmap",
+            title=_("Tool Map"),
+            tool_count=self.tool_count,
+        )
 
     def _on_spool_clicked(self, widget, n):
         self._screen._send_action(widget, "printer.gcode.script",

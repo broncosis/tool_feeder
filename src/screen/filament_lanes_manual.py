@@ -6,6 +6,7 @@ import os
 
 from panels.base_panel import ScreenPanel
 from panels.touch_picker import pick_from_list
+from panels.sidebar_declutter import hide_extra_icons, show_extra_icons
 
 logger = logging.getLogger("KlipperScreen")
 
@@ -72,6 +73,16 @@ class Panel(ScreenPanel):
         self._other_entry = None
 
         self._build_ui()
+
+    # ------------------------------------------------------------------ #
+    # Panel lifecycle                                                      #
+    # ------------------------------------------------------------------ #
+
+    def activate(self):
+        hide_extra_icons(self._screen)
+
+    def deactivate(self):
+        show_extra_icons(self._screen)
 
     # ------------------------------------------------------------------ #
     # UI construction                                                      #

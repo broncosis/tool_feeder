@@ -5,6 +5,7 @@ import logging
 
 from panels.base_panel import ScreenPanel
 from panels.spoolman_common import extract_spool_fields
+from panels.sidebar_declutter import hide_extra_icons, show_extra_icons
 
 logger = logging.getLogger("KlipperScreen")
 
@@ -31,6 +32,16 @@ class Panel(ScreenPanel):
 
         self._build_ui()
         GLib.idle_add(self._fetch_spools)
+
+    # ------------------------------------------------------------------ #
+    # Panel lifecycle                                                      #
+    # ------------------------------------------------------------------ #
+
+    def activate(self):
+        hide_extra_icons(self._screen)
+
+    def deactivate(self):
+        show_extra_icons(self._screen)
 
     # ------------------------------------------------------------------ #
     # UI construction                                                      #

@@ -6,6 +6,7 @@ import logging
 from panels.base_panel import ScreenPanel
 from panels.tool_routing import detect_tool_count, fetch_toolmap_state, apply_toolmap
 from panels.touch_picker import pick_from_list
+from panels.sidebar_declutter import hide_extra_icons, show_extra_icons
 
 logger = logging.getLogger("KlipperScreen")
 
@@ -33,6 +34,16 @@ class Panel(ScreenPanel):
 
         self._build_ui()
         GLib.idle_add(self._fetch_state)
+
+    # ------------------------------------------------------------------ #
+    # Panel lifecycle                                                      #
+    # ------------------------------------------------------------------ #
+
+    def activate(self):
+        hide_extra_icons(self._screen)
+
+    def deactivate(self):
+        show_extra_icons(self._screen)
 
     # ------------------------------------------------------------------ #
     # UI construction                                                      #
@@ -87,12 +98,6 @@ class Panel(ScreenPanel):
         apply_btn = self._gtk.Button("complete", _("Apply"), "color1")
         apply_btn.connect("clicked", self._on_apply)
         root.pack_start(apply_btn, False, False, 0)
-
-        root.pack_start(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL), False, False, 4)
-
-        overview_btn = self._gtk.Button("toolchanger", _("Tool Map Overview"), "color2")
-        overview_btn.connect("clicked", self._on_overview_clicked)
-        root.pack_start(overview_btn, False, False, 0)
 
         self.content.pack_start(root, True, True, 0)
         self.content.show_all()
@@ -155,12 +160,4 @@ class Panel(ScreenPanel):
         backup_text = f"T{backup}" if backup is not None else _("none")
         self._status_lbl.set_text(
             _(f"Currently: T{self.lane} → T{target}  ·  backup: {backup_text}")
-        )
-
-    def _on_overview_clicked(self, widget):
-        self._screen.show_panel(
-            "filament_lanes_toolmap",
-            panel_name="filament_lanes_toolmap",
-            title=_("Tool Map"),
-            tool_count=self.tool_count,
         )

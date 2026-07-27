@@ -5,17 +5,30 @@ import logging
 
 from panels.base_panel import ScreenPanel
 from panels.tool_routing import detect_tool_count, fetch_toolmap_state, reset_toolmap
+from panels.sidebar_declutter import hide_extra_icons, show_extra_icons
 
 logger = logging.getLogger("KlipperScreen")
 
-# Layout constants for the drawn diagram. Arc heights scale with how far
-# apart two boxes are (more distant tools get a taller hump) so overlapping
-# arrows stay readable even when several tools remap across the row.
-BOX_W = 110
+# Layout constants for the drawn diagram. Box width/gap scale down as
+# tool_count grows (see _build_ui) so the whole diagram always fits within
+# KlipperScreen's 800x480 screen with no scrolling — some touchscreens
+# handle scrolling poorly, so this trades box size for guaranteed fit
+# rather than the other way around.
+#
+# The content area is NOT the full 800px screen width — base_panel.py's
+# vertical-sidebar layout puts the action_bar in its own column sized to
+# action_bar_width = screen_width * 0.1 (80px on an 800px screen), with
+# content occupying the rest. 750 (assuming the full screen was available)
+# was still ~90px too wide; 660 leaves headroom for that 80px sidebar
+# column plus this panel's own left/right margins.
+DIAGRAM_MAX_W = 660
+MIN_BOX_W = 46
+DEFAULT_BOX_W = 110
 BOX_H = 56
-GAP = 40
-LEFT_MARGIN = 20
-ARROW_STEP = 12
+DEFAULT_GAP = 30
+MIN_GAP = 10
+LEFT_MARGIN = 10
+ARROW_STEP = 8
 ARROWHEAD = 7
 
 FIL_OK_FILL = (0.83, 0.97, 0.87)
@@ -35,7 +48,9 @@ class Panel(ScreenPanel):
     """
     Visual overview of every tool's current mapping/backup/filament status
     at once — a diagram equivalent of the console's SHOW_TOOLMAP table.
-    Reachable from the per-lane routing page's "Tool Map Overview" button.
+    Reachable via the "Tool Map" sidebar button, present anywhere in the
+    Filament section (added in filament_lanes.py's activate()) — not tied
+    to any specific lane's Routing page.
     Also offers Reset All (RESET_TOOLMAP), the one macro with no other UI
     exposure — this all-tools screen is the natural place for an all-tools
     action.
@@ -52,6 +67,16 @@ class Panel(ScreenPanel):
 
         self._build_ui()
         GLib.idle_add(self._fetch_state)
+
+    # ------------------------------------------------------------------ #
+    # Panel lifecycle                                                      #
+    # ------------------------------------------------------------------ #
+
+    def activate(self):
+        hide_extra_icons(self._screen)
+
+    def deactivate(self):
+        show_extra_icons(self._screen)
 
     # ------------------------------------------------------------------ #
     # UI construction                                                      #
@@ -71,21 +96,27 @@ class Panel(ScreenPanel):
             self.content.show_all()
             return
 
+        # Shrink box width/gap (down to a readable floor) so N boxes always
+        # fit within DIAGRAM_MAX_W — avoids ever needing horizontal scroll.
+        n = self.tool_count
+        avail = DIAGRAM_MAX_W - 2 * LEFT_MARGIN
+        self._box_w = max(MIN_BOX_W, min(DEFAULT_BOX_W,
+                           (avail - (n - 1) * MIN_GAP) / n))
+        gap_budget = avail - n * self._box_w
+        self._gap = max(MIN_GAP, min(DEFAULT_GAP, gap_budget / (n - 1))) if n > 1 else 0
+        self._font_size = 20 if self._box_w >= 70 else 15
+
         top_margin = self._arc_margin()
         bottom_margin = self._arc_margin()
-        diagram_w = 2 * LEFT_MARGIN + self.tool_count * BOX_W + (self.tool_count - 1) * GAP
+        diagram_w = 2 * LEFT_MARGIN + n * self._box_w + (n - 1) * self._gap
         diagram_h = top_margin + BOX_H + bottom_margin
         self._top_margin = top_margin
         self._bottom_margin = bottom_margin
 
         self._drawing = Gtk.DrawingArea()
-        self._drawing.set_size_request(diagram_w, diagram_h)
+        self._drawing.set_size_request(int(diagram_w), int(diagram_h))
         self._drawing.connect("draw", self._on_draw)
-
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
-        scroll.add(self._drawing)
-        root.pack_start(scroll, True, True, 0)
+        root.pack_start(self._drawing, False, False, 0)
 
         legend = Gtk.Label()
         legend.set_markup(
@@ -95,7 +126,15 @@ class Panel(ScreenPanel):
             + _("orange dashed arc below = backup")
             + "</small>"
         )
+        # set_line_wrap(True) alone doesn't actually wrap: a Gtk.Label still
+        # requests its full unwrapped width as its natural size unless
+        # something caps it, and that request was overflowing the 800px
+        # screen (dragging the diagram/titlebar along with it since nothing
+        # downstream shrinks below a widget's natural request). Capping the
+        # width to the diagram's own computed width forces real wrapping.
         legend.set_line_wrap(True)
+        legend.set_size_request(int(diagram_w), -1)
+        legend.set_max_width_chars(1)
         legend.get_style_context().add_class("dim-label")
         root.pack_start(legend, False, False, 0)
 
@@ -108,8 +147,10 @@ class Panel(ScreenPanel):
 
     def _arc_margin(self):
         # Taller drawing area for more tools, since arcs between distant
-        # boxes need more headroom to stay visually distinct from nearby ones.
-        return min(100, 30 + ARROW_STEP * max(1, self.tool_count - 1))
+        # boxes need more headroom to stay visually distinct from nearby
+        # ones — capped low enough that the whole page still fits KlipperScreen's
+        # 480px height alongside the legend/reset button, no scroll needed.
+        return min(60, 24 + ARROW_STEP * max(1, self.tool_count - 1))
 
     # ------------------------------------------------------------------ #
     # Data                                                                 #
@@ -129,9 +170,9 @@ class Panel(ScreenPanel):
     # ------------------------------------------------------------------ #
 
     def _box_rect(self, n):
-        x = LEFT_MARGIN + n * (BOX_W + GAP)
+        x = LEFT_MARGIN + n * (self._box_w + self._gap)
         y = self._top_margin
-        return x, y, BOX_W, BOX_H
+        return x, y, self._box_w, BOX_H
 
     def _on_draw(self, widget, cr):
         for n in range(self.tool_count):
@@ -150,7 +191,7 @@ class Panel(ScreenPanel):
 
             cr.set_source_rgb(*TEXT_COLOR)
             cr.select_font_face("sans-serif")
-            cr.set_font_size(20)
+            cr.set_font_size(self._font_size)
             label = f"T{n}"
             extents = cr.text_extents(label)
             cr.move_to(x + w / 2 - extents.width / 2, y + h / 2 + extents.height / 2)
