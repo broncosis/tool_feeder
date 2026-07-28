@@ -6,7 +6,7 @@ import os
 
 from panels.base_panel import ScreenPanel
 from panels.spoolman_common import extract_spool_fields
-from panels.sidebar_declutter import hide_extra_icons, show_extra_icons
+from panels.sidebar_declutter import hide_extra_icons, show_extra_icons, add_toolmap_button
 
 logger = logging.getLogger("KlipperScreen")
 
@@ -36,6 +36,11 @@ _INDICATOR_CSS = b"""
 .action_bar button.color2,
 .action_bar button.color3,
 .action_bar button.color4 { border-bottom: 0; }
+/* Same border-bottom removal, opt-in per-button via this class instead of
+   a container scope -- used by filament_lanes_manual.py's compressed
+   Map/Failover + Clear + Save row, which doesn't need a whole line each
+   or the bar underneath on an already height-constrained page. */
+button.compact-btn { border-bottom: 0; }
 """
 
 
@@ -512,17 +517,13 @@ class Panel(ScreenPanel):
             action_bar.add(btn)
             self._extra_bar_btns.append(btn)
 
-        # Persistent sidebar shortcut to the all-tools mapping diagram —
-        # reachable from anywhere in the Filament section (not just a
-        # specific lane's Routing page), and avoids relying on any
-        # in-panel scrolling, which some touchscreens handle poorly.
-        toolmap_btn = self._gtk.Button("network", _("Tool Map"), "color4", scale=1.0)
-        toolmap_btn.set_vexpand(False)
-        toolmap_btn.connect("clicked", self._on_toolmap_btn_clicked)
-        action_bar.add(toolmap_btn)
-        self._extra_bar_btns.append(toolmap_btn)
-
         action_bar.show_all()
+
+        # Persistent sidebar shortcut to the all-tools mapping diagram —
+        # reachable from anywhere in the Filament section (also added by
+        # filament_lanes_manual.py/filament_lanes_spoolman.py's own
+        # activate(), not just here).
+        self._extra_bar_btns.append(add_toolmap_button(self._screen))
 
         # Filament Lanes doesn't need the notification/shutdown shortcuts
         # cluttering the sidebar — see sidebar_declutter.py for why every
@@ -583,14 +584,6 @@ class Panel(ScreenPanel):
     def _on_action_btn_clicked(self, widget, macro):
         self._screen._send_action(widget, "printer.gcode.script",
                                   {"script": macro})
-
-    def _on_toolmap_btn_clicked(self, widget):
-        self._screen.show_panel(
-            "filament_lanes_toolmap",
-            panel_name="filament_lanes_toolmap",
-            title=_("Tool Map"),
-            tool_count=self.tool_count,
-        )
 
     def _on_spool_clicked(self, widget, n):
         self._screen._send_action(widget, "printer.gcode.script",

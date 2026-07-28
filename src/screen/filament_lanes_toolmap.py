@@ -73,6 +73,12 @@ class Panel(ScreenPanel):
     # ------------------------------------------------------------------ #
 
     def activate(self):
+        # KlipperScreen's show_panel() only calls __init__ the first time a
+        # panel_name is created; every later visit just reuses this same
+        # cached instance and calls activate() — so without refetching
+        # here, the diagram would keep showing whatever _TOOLMAP state
+        # existed the very first time this page was ever opened.
+        self._fetch_state()
         hide_extra_icons(self._screen)
 
     def deactivate(self):

@@ -5,7 +5,7 @@ import logging
 
 from panels.base_panel import ScreenPanel
 from panels.spoolman_common import extract_spool_fields
-from panels.sidebar_declutter import hide_extra_icons, show_extra_icons
+from panels.sidebar_declutter import hide_extra_icons, show_extra_icons, add_toolmap_button
 
 logger = logging.getLogger("KlipperScreen")
 
@@ -29,6 +29,7 @@ class Panel(ScreenPanel):
         self.lane = lane
         self.current_name = current_name
         self.spools = []
+        self._toolmap_btn = None
 
         self._build_ui()
         GLib.idle_add(self._fetch_spools)
@@ -39,9 +40,12 @@ class Panel(ScreenPanel):
 
     def activate(self):
         hide_extra_icons(self._screen)
+        self._toolmap_btn = add_toolmap_button(self._screen)
 
     def deactivate(self):
         show_extra_icons(self._screen)
+        self._screen.base_panel.action_bar.remove(self._toolmap_btn)
+        self._toolmap_btn = None
 
     # ------------------------------------------------------------------ #
     # UI construction                                                      #

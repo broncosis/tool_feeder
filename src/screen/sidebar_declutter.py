@@ -42,3 +42,25 @@ def show_extra_icons(screen):
     control["shutdown"].show()
     control["back"].set_vexpand(True)
     control["home"].set_vexpand(True)
+
+
+def add_toolmap_button(screen):
+    """Persistent 'Tool Map' sidebar button, opening the all-tools mapping
+    diagram from anywhere in the Filament section (lane grid, Assign,
+    Manual, Routing) — not just a specific lane's Routing page. Returns
+    the button so the caller can remove it in its own deactivate(), same
+    convention as any other per-panel extra action_bar button."""
+    def _open(widget):
+        screen.show_panel(
+            "filament_lanes_toolmap",
+            panel_name="filament_lanes_toolmap",
+            title=_("Tool Map"),
+        )
+
+    action_bar = screen.base_panel.action_bar
+    btn = screen.gtk.Button("network", _("Tool Map"), "color4", scale=1.0)
+    btn.set_vexpand(False)
+    btn.connect("clicked", _open)
+    action_bar.add(btn)
+    action_bar.show_all()
+    return btn

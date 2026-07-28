@@ -6,7 +6,7 @@ import os
 
 from panels.base_panel import ScreenPanel
 from panels.touch_picker import pick_from_list
-from panels.sidebar_declutter import hide_extra_icons, show_extra_icons
+from panels.sidebar_declutter import hide_extra_icons, show_extra_icons, add_toolmap_button
 
 logger = logging.getLogger("KlipperScreen")
 
@@ -63,14 +63,14 @@ class Panel(ScreenPanel):
     _save(), which clears t{n}__spool_id in turn).
     """
 
-    def __init__(self, screen, title, lane=0, current_name="", **kwargs):
+    def __init__(self, screen, title, lane=0, **kwargs):
         title = title or _("Manual Assign")
         super().__init__(screen, title)
 
         self.lane = lane
-        self.current_name = current_name
         self.selected_color = None  # hex string, no '#'
         self._other_entry = None
+        self._toolmap_btn = None
 
         self._build_ui()
 
@@ -80,20 +80,23 @@ class Panel(ScreenPanel):
 
     def activate(self):
         hide_extra_icons(self._screen)
+        self._toolmap_btn = add_toolmap_button(self._screen)
 
     def deactivate(self):
         show_extra_icons(self._screen)
+        self._screen.base_panel.action_bar.remove(self._toolmap_btn)
+        self._toolmap_btn = None
 
     # ------------------------------------------------------------------ #
     # UI construction                                                      #
     # ------------------------------------------------------------------ #
 
     def _build_ui(self):
-        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         root.set_margin_start(12)
         root.set_margin_end(12)
-        root.set_margin_top(12)
-        root.set_margin_bottom(12)
+        root.set_margin_top(8)
+        root.set_margin_bottom(8)
 
         lane_lbl = Gtk.Label()
         lane_lbl.set_markup(f"<b>T{self.lane}</b> — {_('Manual Assignment')}")
@@ -101,7 +104,10 @@ class Panel(ScreenPanel):
         root.pack_start(lane_lbl, False, False, 0)
 
         # ── Material picker ─────────────────────────────────────────────
-        root.pack_start(Gtk.Label(label=_("Material"), halign=Gtk.Align.START), False, False, 0)
+        # Label + button share one row instead of stacking — every row
+        # saved here matters on a page this height-constrained.
+        material_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        material_row.pack_start(Gtk.Label(label=_("Material")), False, False, 0)
 
         # A tap-to-open list dialog, not Gtk.ComboBoxText — see
         # touch_picker.py for why ComboBoxText's popup doesn't survive a
@@ -111,7 +117,8 @@ class Panel(ScreenPanel):
         self._material_btn = Gtk.Button(label=self._material_options[0])
         self._material_btn.set_halign(Gtk.Align.FILL)
         self._material_btn.connect("clicked", self._on_pick_material)
-        root.pack_start(self._material_btn, True, True, 0)
+        material_row.pack_start(self._material_btn, True, True, 0)
+        root.pack_start(material_row, False, False, 0)
 
         self._other_entry = Gtk.Entry()
         self._other_entry.set_placeholder_text(_("Enter material"))
@@ -120,50 +127,64 @@ class Panel(ScreenPanel):
         root.pack_start(self._other_entry, False, False, 0)
 
         # ── Color presets ───────────────────────────────────────────────
-        root.pack_start(Gtk.Label(label=_("Color"), halign=Gtk.Align.START), False, False, 0)
-
+        # All 12 presets on a single FlowBox row (was 2 rows of 6) — fits
+        # comfortably within the content width and saves a full row.
         grid = Gtk.FlowBox()
         grid.set_selection_mode(Gtk.SelectionMode.NONE)
-        grid.set_max_children_per_line(6)
+        grid.set_max_children_per_line(len(PRESET_COLORS))
+        grid.set_min_children_per_line(len(PRESET_COLORS))
         for name, color_hex in PRESET_COLORS:
             btn = self._build_swatch_button(name, color_hex)
             grid.add(btn)
         root.pack_start(grid, False, False, 0)
 
-        custom_btn = self._gtk.Button("color1", _("Custom…"), "color2")
-        custom_btn.connect("clicked", self._on_custom_color_clicked)
-        root.pack_start(custom_btn, False, False, 0)
+        # Current filament type, right under the color grid so both
+        # choices are confirmed together just above the preview swatch.
+        self._material_lbl = Gtk.Label()
+        self._material_lbl.set_halign(Gtk.Align.START)
+        self._material_lbl.get_style_context().add_class("dim-label")
+        self._update_material_label()
+        root.pack_start(self._material_lbl, False, False, 0)
 
+        # Selected-color preview first, Custom… button after.
+        custom_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self._color_preview = Gtk.DrawingArea()
-        self._color_preview.set_size_request(36, 36)
+        self._color_preview.set_size_request(30, 30)
         self._color_preview.connect("draw", self._draw_preview)
-        preview_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        preview_box.pack_start(Gtk.Label(label=_("Selected:")), False, False, 0)
-        preview_box.pack_start(self._color_preview, False, False, 0)
-        root.pack_start(preview_box, False, False, 0)
+        custom_row.pack_start(Gtk.Label(label=_("Selected:")), False, False, 0)
+        custom_row.pack_start(self._color_preview, False, False, 0)
 
-        # ── Optional name ───────────────────────────────────────────────
-        root.pack_start(Gtk.Label(label=_("Name (optional)"), halign=Gtk.Align.START), False, False, 0)
-        self._name_entry = Gtk.Entry()
-        self._name_entry.set_text(self.current_name or "")
-        self._name_entry.set_placeholder_text(_("e.g. Red PLA"))
-        root.pack_start(self._name_entry, False, False, 0)
+        custom_btn = self._gtk.Button("color1", _("Custom…"), "color2")
+        custom_btn.get_style_context().add_class("compact-btn")
+        custom_btn.connect("clicked", self._on_custom_color_clicked)
+        custom_row.pack_start(custom_btn, False, False, 0)
+        root.pack_start(custom_row, False, False, 0)
 
         # ── Actions ──────────────────────────────────────────────────────
+        # All three share one row (was Map/Failover alone, then Clear+Save
+        # below it) and drop the global .4em colorN bottom-border (see the
+        # "compact-btn" CSS rule injected by filament_lanes.py) — neither
+        # needs a whole line of its own on a page already tight on height.
+        action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+
         route_btn = self._gtk.Button("toolchanger", _("Map / Failover"), "color3")
         route_btn.set_size_request(-1, 34)
+        route_btn.get_style_context().add_class("compact-btn")
         route_btn.connect("clicked", self._on_routing_clicked)
-        root.pack_start(route_btn, False, False, 0)
+        action_box.pack_start(route_btn, True, True, 0)
 
-        action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         clear_btn = self._gtk.Button("cancel", _("Clear"), "color2")
         clear_btn.set_size_request(-1, 34)
+        clear_btn.get_style_context().add_class("compact-btn")
         clear_btn.connect("clicked", self._on_clear)
         action_box.pack_start(clear_btn, True, True, 0)
 
         save_btn = self._gtk.Button("complete", _("Save"), "color1")
+        save_btn.set_size_request(-1, 34)
+        save_btn.get_style_context().add_class("compact-btn")
         save_btn.connect("clicked", self._on_save)
         action_box.pack_start(save_btn, True, True, 0)
+
         root.pack_start(action_box, False, False, 0)
 
         # This panel has more controls (material, color grid, name, routing,
@@ -258,6 +279,11 @@ class Panel(ScreenPanel):
         self._other_entry.set_no_show_all(not is_other)
         if is_other:
             self._other_entry.show()
+        self._update_material_label()
+
+    def _update_material_label(self):
+        text = self._material_options[self._material_idx] if self._material_options else ""
+        self._material_lbl.set_text(_(f"Filament: {text}") if text else "")
 
     def _selected_material(self):
         text = self._material_options[self._material_idx] if self._material_options else ""
@@ -302,7 +328,10 @@ class Panel(ScreenPanel):
         entry = {
             "color": self.selected_color or "808080",
             "material": material,
-            "name": self._name_entry.get_text().strip(),
+            # No free-text name field — no practical way to type on this
+            # touchscreen. The lane card falls back to "-" when name is
+            # empty, so reuse material here for a more useful display.
+            "name": material,
         }
 
         # Mirrors filament_lanes_spoolman.py's _assign() gcode shape exactly
