@@ -76,11 +76,13 @@ class Panel(ScreenPanel):
 
         clear_btn = self._gtk.Button("cancel", _("Clear"), "color2")
         clear_btn.set_size_request(-1, 34)
+        clear_btn.set_vexpand(False)
         clear_btn.connect("clicked", self._on_clear)
         left.pack_start(clear_btn, False, False, 0)
 
         route_btn = self._gtk.Button("toolchanger", _("Map / Failover"), "color3")
         route_btn.set_size_request(-1, 34)
+        route_btn.set_vexpand(False)
         route_btn.connect("clicked", self._on_routing_clicked)
         left.pack_start(route_btn, False, False, 0)
 

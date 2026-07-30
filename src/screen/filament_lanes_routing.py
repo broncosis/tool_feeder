@@ -6,7 +6,7 @@ import logging
 from panels.base_panel import ScreenPanel
 from panels.tool_routing import detect_tool_count, fetch_toolmap_state, apply_toolmap
 from panels.touch_picker import pick_from_list
-from panels.sidebar_declutter import hide_extra_icons, show_extra_icons
+from panels.sidebar_declutter import hide_extra_icons, show_extra_icons, add_toolmap_button
 
 logger = logging.getLogger("KlipperScreen")
 
@@ -31,6 +31,7 @@ class Panel(ScreenPanel):
 
         self.lane = lane
         self.tool_count = tool_count or detect_tool_count(self)
+        self._toolmap_btn = None
 
         self._build_ui()
         GLib.idle_add(self._fetch_state)
@@ -41,9 +42,12 @@ class Panel(ScreenPanel):
 
     def activate(self):
         hide_extra_icons(self._screen)
+        self._toolmap_btn = add_toolmap_button(self._screen)
 
     def deactivate(self):
         show_extra_icons(self._screen)
+        self._screen.base_panel.action_bar.remove(self._toolmap_btn)
+        self._toolmap_btn = None
 
     # ------------------------------------------------------------------ #
     # UI construction                                                      #
@@ -96,6 +100,7 @@ class Panel(ScreenPanel):
         root.pack_start(self._backup_btn, True, True, 0)
 
         apply_btn = self._gtk.Button("complete", _("Apply"), "color1")
+        apply_btn.set_vexpand(False)
         apply_btn.connect("clicked", self._on_apply)
         root.pack_start(apply_btn, False, False, 0)
 

@@ -155,6 +155,7 @@ class Panel(ScreenPanel):
         custom_row.pack_start(self._color_preview, False, False, 0)
 
         custom_btn = self._gtk.Button("color1", _("Custom…"), "color2")
+        custom_btn.set_vexpand(False)
         custom_btn.get_style_context().add_class("compact-btn")
         custom_btn.connect("clicked", self._on_custom_color_clicked)
         custom_row.pack_start(custom_btn, False, False, 0)
@@ -169,18 +170,21 @@ class Panel(ScreenPanel):
 
         route_btn = self._gtk.Button("toolchanger", _("Map / Failover"), "color3")
         route_btn.set_size_request(-1, 34)
+        route_btn.set_vexpand(False)
         route_btn.get_style_context().add_class("compact-btn")
         route_btn.connect("clicked", self._on_routing_clicked)
         action_box.pack_start(route_btn, True, True, 0)
 
         clear_btn = self._gtk.Button("cancel", _("Clear"), "color2")
         clear_btn.set_size_request(-1, 34)
+        clear_btn.set_vexpand(False)
         clear_btn.get_style_context().add_class("compact-btn")
         clear_btn.connect("clicked", self._on_clear)
         action_box.pack_start(clear_btn, True, True, 0)
 
         save_btn = self._gtk.Button("complete", _("Save"), "color1")
         save_btn.set_size_request(-1, 34)
+        save_btn.set_vexpand(False)
         save_btn.get_style_context().add_class("compact-btn")
         save_btn.connect("clicked", self._on_save)
         action_box.pack_start(save_btn, True, True, 0)

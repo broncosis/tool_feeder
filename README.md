@@ -13,6 +13,18 @@ any combination of:
 
 Each component installs independently.
 
+## Screenshots
+
+| Filament Lanes | Manual Assign |
+| --- | --- |
+| ![Filament Lanes](docs/screenshots/filament_lanes.png) | ![Manual Assign](docs/screenshots/manual_assign.png) |
+| Live per-lane status, right from the sidebar | Color/material assignment without Spoolman |
+
+| Tool Routing | Tool Map |
+| --- | --- |
+| ![Tool Routing](docs/screenshots/routing.png) | ![Tool Map](docs/screenshots/toolmap.png) |
+| Per-lane remap/failover target | Every tool's mapping at a glance |
+
 ---
 
 ## Requirements
@@ -81,9 +93,14 @@ else from scratch.
 For KlipperScreen: if Spoolman isn't installed, the panel's "Assign" button
 goes straight to a manual color/material picker instead of a Spoolman browser
 — pick a color from a preset swatch grid (or a custom color picker) and a
-material from a dropdown backed by `src/printer/materials.cfg` (edit that file
-to add more materials). If Spoolman *is* installed, "Assign" offers a choice
-between the two, per lane.
+material from a tap-to-select list backed by `src/printer/materials.cfg` (edit
+that file to add more materials). If Spoolman *is* installed, "Assign" offers a
+choice between the two, per lane.
+
+Every lane also has a **Map / Failover** page for tool remapping (e.g. route
+T1 to T3 if T1 runs out) and backup-tool assignment, plus a **Tool Map**
+overview reachable from the sidebar of any Filament screen, showing every
+tool's current mapping and backup at a glance.
 
 The installer also offers to add a single `[update_manager tool_feeder]` entry
 to `moonraker.conf` covering whichever components you installed, so a `git
