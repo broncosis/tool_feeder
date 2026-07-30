@@ -1,5 +1,9 @@
 # Tool Feeder
 
+> **⚠ Experimental.** Under active development and tested on a limited set of
+> hardware. Expect rough edges. Review generated configs before use and keep
+> an eye on your printer — use at your own risk.
+
 Filament management for Klipper toolchangers — automated per-tool loading,
 live filament-lane status on the touchscreen, and Spoolman integration. Pick
 any combination of:
