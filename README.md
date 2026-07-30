@@ -15,15 +15,20 @@ Each component installs independently.
 
 ## Screenshots
 
-| Filament Lanes | Manual Assign |
+| Filament Lanes | Tool Map |
 | --- | --- |
-| ![Filament Lanes](docs/screenshots/filament_lanes.png) | ![Manual Assign](docs/screenshots/manual_assign.png) |
-| Live per-lane status, right from the sidebar | Color/material assignment without Spoolman |
+| ![Filament Lanes](docs/screenshots/filament_lanes.png) | ![Tool Map](docs/screenshots/toolmap.png) |
+| Live per-lane status, right from the sidebar | Every tool's mapping at a glance |
 
-| Tool Routing | Tool Map |
+| Manual Assign | Spoolman Assign |
 | --- | --- |
-| ![Tool Routing](docs/screenshots/routing.png) | ![Tool Map](docs/screenshots/toolmap.png) |
-| Per-lane remap/failover target | Every tool's mapping at a glance |
+| ![Manual Assign](docs/screenshots/manual_assign.png) | ![Spoolman Assign](docs/screenshots/spoolman.png) |
+| Color/material assignment without Spoolman | Pick a spool straight from Spoolman |
+
+| Tool Routing |
+| --- |
+| ![Tool Routing](docs/screenshots/routing.png) |
+| Per-lane remap/failover target |
 
 ---
 
