@@ -506,6 +506,8 @@ install_feeder() {
 
     restart_service klipper
 
+    INSTALLED_FEEDER=1
+
     echo ""
     log_ok "Filament Feeder installed."
     echo ""
@@ -736,6 +738,7 @@ install_klipperscreen_panel() {
 #  Main
 # =======================================================================
 
+INSTALLED_FEEDER=0
 INSTALLED_LANE_SYNC=0
 INSTALLED_KLIPPERSCREEN=0
 
@@ -802,9 +805,17 @@ fi
 if [ -n "$CONFIG_DIR" ] && [ -f "$CONFIG_DIR/moonraker.conf" ]; then
     if ! grep -q '^\[update_manager tool_feeder\]' "$CONFIG_DIR/moonraker.conf" 2>/dev/null; then
         if confirm "Add Tool Feeder to Moonraker's update manager?" "y"; then
-            services="klipper"
-            [ "$INSTALLED_LANE_SYNC" = 1 ] && services="$services spoolman-lane-sync"
-            [ "$INSTALLED_KLIPPERSCREEN" = 1 ] && services="$services KlipperScreen"
+            # Moonraker only accepts a section's own name, "klipper", or
+            # "moonraker" in managed_services (see update_manager/app_deploy.py's
+            # _configure_managed_services: svc_choices = [self.name, "klipper",
+            # "moonraker"]) - any other service name is rejected with a startup
+            # warning, which is exactly what listing spoolman-lane-sync/
+            # KlipperScreen here used to trigger. Filament Feeder is the only
+            # component that needs a Klipper restart after a git pull (macro
+            # changes), so that's the only extra service this entry can
+            # legitimately claim.
+            services=""
+            [ "$INSTALLED_FEEDER" = 1 ] && services="klipper"
 
             if [ "${DRY_RUN:-0}" = "1" ]; then
                 log_info "[dry-run] would append [update_manager tool_feeder] to moonraker.conf"
@@ -817,11 +828,45 @@ if [ -n "$CONFIG_DIR" ] && [ -f "$CONFIG_DIR/moonraker.conf" ]; then
                     echo "origin: $REPO_URL"
                     echo "primary_branch: main"
                     echo "install_script: install.sh"
-                    echo "managed_services: $services"
+                    [ -n "$services" ] && echo "managed_services: $services"
                 } >> "$CONFIG_DIR/moonraker.conf"
                 log_ok "Added [update_manager tool_feeder] to moonraker.conf"
             fi
         fi
+    fi
+
+    # spoolman-lane-sync needs its own update_manager entry (not
+    # managed_services above) to get restarted on update - a git_repo entry's
+    # managed_services can only ever be itself, "klipper", or "moonraker", per
+    # the same Moonraker restriction. Giving it a section named after the
+    # actual systemd service means it restarts itself by default (is_system_service
+    # defaults true, so svc_default becomes [self.name]) - no managed_services
+    # override needed. Points at the same checkout as tool_feeder; Moonraker
+    # is fine tracking one repo path from two entries.
+    if [ "$INSTALLED_LANE_SYNC" = 1 ] && ! grep -q '^\[update_manager spoolman-lane-sync\]' "$CONFIG_DIR/moonraker.conf" 2>/dev/null; then
+        if [ "${DRY_RUN:-0}" = "1" ]; then
+            log_info "[dry-run] would append [update_manager spoolman-lane-sync] to moonraker.conf"
+        else
+            {
+                echo ""
+                echo "[update_manager spoolman-lane-sync]"
+                echo "type: git_repo"
+                echo "path: $REPO_ROOT"
+                echo "origin: $REPO_URL"
+                echo "primary_branch: main"
+            } >> "$CONFIG_DIR/moonraker.conf"
+            log_ok "Added [update_manager spoolman-lane-sync] to moonraker.conf"
+        fi
+    fi
+
+    # KlipperScreen is deliberately NOT added here: its own installer already
+    # owns a [update_manager KlipperScreen] section pointing at the real
+    # KlipperScreen repo, and Moonraker config section names must be unique -
+    # a second section with that same name would conflict. A git pull on this
+    # repo still updates the symlinked panel files; KlipperScreen just needs a
+    # manual restart to pick them up (or use its own update-manager restart).
+    if [ "$INSTALLED_KLIPPERSCREEN" = 1 ]; then
+        log_info "Note: after future 'git pull' updates, restart KlipperScreen manually (sudo systemctl restart KlipperScreen) to pick up panel changes - it can't be added to managed_services (Moonraker restricts that option to klipper/moonraker/the entry's own name)."
     fi
 
     if [ "$INSTALLED_LANE_SYNC" = 1 ] && [ -f "$HOME/printer_data/moonraker.asvc" ]; then
