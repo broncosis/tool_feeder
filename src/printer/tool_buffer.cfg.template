@@ -12,6 +12,10 @@ extruder_stepper: _tool@@N@@_feeder
 multiplier_high: 1.05
 multiplier_low: 0.95
 filament_error_sensitivity: 5
+# Prints "Buffer T@@N@@: neutral -> advancing" etc. to the console on every
+# state change, so you can confirm the sensors are triggering. Set to False
+# once you've verified it's working, to quiet the console during prints.
+debug_console: True
 
 # ---- Single-sensor alternative (Belay-wiring-compatible) — swap in by ----
 # ---- commenting out the block above and uncommenting this one: ----------
@@ -22,3 +26,4 @@ filament_error_sensitivity: 5
 # extruder_stepper: _tool@@N@@_feeder
 # multiplier_high: 1.05
 # multiplier_low: 0.95
+# debug_console: True

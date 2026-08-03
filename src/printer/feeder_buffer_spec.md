@@ -67,6 +67,8 @@ multiplier_low: 0.95            # optional, default 0.95 — AFC name + default 
 filament_error_sensitivity: 5   # optional, default 0 (disabled) — AFC name match
                                 # 0 = disabled, 1 = least sensitive, 10 = most sensitive
                                 # formula: fault_distance = (11 - sensitivity) * 10 mm
+debug_console: True            # optional, default True — prints state transitions to
+                                # the console (see "Debug Console Output" below)
 ```
 
 ### `sensor_mode: single` — Belay-compatible single-sensor buffer
@@ -87,6 +89,7 @@ invert_sensor: False            # optional, default False — flip active-state
 extruder_stepper: _tool5_feeder # required
 multiplier_high: 1.05           # optional, default 1.05 — matches Belay's default
 multiplier_low: 0.95            # optional, default 0.95 — matches Belay's default
+debug_console: True             # optional, default True — see "Debug Console Output" below
 ```
 
 ---
@@ -106,6 +109,24 @@ Three states per instance:
 - Neutral zone provides hysteresis — no hunting
 
 State mirrors AFC `AFC_buffer` logic exactly so behaviour is consistent pre/post migration.
+
+---
+
+## Debug Console Output
+
+`debug_console` (default `True`, per-instance) makes every state transition
+print to the console via `gcode.respond_info`, e.g.:
+
+```
+Buffer T0: neutral -> advancing
+Buffer T0: advancing -> neutral
+```
+
+Only fires on an actual state change (not on every sensor poll), so it's
+useful for confirming the sensors are wired correctly and triggering as
+filament moves, without flooding the console. Set to `False` per-tool once
+you've verified a buffer is working, to keep the console quiet during real
+prints.
 
 ---
 

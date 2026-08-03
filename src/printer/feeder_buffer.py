@@ -35,6 +35,7 @@ class _BufferBase:
 
         self.multiplier_high = config.getfloat('multiplier_high', 1.05, above=0.)
         self.multiplier_low  = config.getfloat('multiplier_low',  0.95, above=0.)
+        self.debug_console   = config.getboolean('debug_console', True)
 
         self.state         = 'neutral'
         self.feeder        = None    # ExtruderStepper — resolved in _handle_ready
@@ -46,7 +47,7 @@ class _BufferBase:
         self.printer.register_event_handler('klippy:ready', self._handle_ready)
 
         # Per-instance mux GCode commands (dispatched by BUFFER=<name>)
-        gcode = self.printer.lookup_object('gcode')
+        self.gcode = gcode = self.printer.lookup_object('gcode')
         gcode.register_mux_command(
             'QUERY_BUFFER', 'BUFFER', self.name, self.cmd_QUERY_BUFFER,
             desc="Report buffer state and rotation_distance")
@@ -101,6 +102,20 @@ class _BufferBase:
         if mcu_stepper is None:
             return 0
         return mcu_stepper.get_commanded_position()
+
+    def _apply_state(self, new_state, factor):
+        # Shared by both sensor modes' _update() — only fires on an actual
+        # state change, so it can't spam the console every sensor poll.
+        if new_state == self.state:
+            return
+        old_state = self.state
+        self.state = new_state
+        self._set_rd(self.base_rd * factor)
+        if self.fault_dist is not None:
+            self.last_steps = self._feeder_steps()
+        if self.debug_console:
+            self.gcode.respond_info(
+                "Buffer %s: %s -> %s" % (self.name, old_state, new_state))
 
     # -------------------------------------------------------------------------
     # Jam detection (dual mode only — fault_dist stays None in single mode)
@@ -216,11 +231,7 @@ class DualSensorBuffer(_BufferBase):
         else:
             new_state, factor = 'neutral', 1.
 
-        if new_state != self.state:
-            self.state = new_state
-            self._set_rd(self.base_rd * factor)
-            if self.fault_dist is not None:
-                self.last_steps = self._feeder_steps()
+        self._apply_state(new_state, factor)
 
     def _stuck_sensor_label(self):
         return ('advance'  if self.adv_state else
@@ -273,9 +284,7 @@ class BelaySensorBuffer(_BufferBase):
             # Sensor inactive — treat as expanded (same as dual-mode advance)
             new_state, factor = 'trailing', self.multiplier_high
 
-        if new_state != self.state:
-            self.state = new_state
-            self._set_rd(self.base_rd * factor)
+        self._apply_state(new_state, factor)
 
 
 def load_config_prefix(config):
