@@ -95,7 +95,13 @@ class _BufferBase:
     # -------------------------------------------------------------------------
 
     def _set_rd(self, rd):
-        self.feeder.extruder_stepper.stepper.rotation_dist = rd
+        # NOT `.rotation_dist = rd` - that attribute doesn't exist anywhere
+        # in Klipper's real stepper.py (verified: grepping the whole klippy
+        # tree for `.rotation_dist` only ever matches this file). The real,
+        # motion-affecting state is private (`_rotation_dist`/`_step_dist`),
+        # only safely mutable via this method - it also re-anchors MCU
+        # position tracking so the change doesn't cause a position jump.
+        self.feeder.extruder_stepper.stepper.set_rotation_distance(rd)
 
     def _feeder_steps(self):
         mcu_stepper = getattr(self.feeder.extruder_stepper.stepper, '_mcu_stepper', None)
@@ -158,7 +164,7 @@ class _BufferBase:
     # -------------------------------------------------------------------------
 
     def cmd_QUERY_BUFFER(self, gcmd):
-        rd = self.feeder.extruder_stepper.stepper.rotation_dist
+        rd, _ = self.feeder.extruder_stepper.stepper.get_rotation_distance()
         gcmd.respond_info(
             "Buffer %s  state=%s  rotation_distance=%.6f  base=%.6f"
             % (self.name, self.state, rd, self.base_rd))
@@ -166,9 +172,10 @@ class _BufferBase:
     def cmd_SET_ROTATION_FACTOR(self, gcmd):
         factor = gcmd.get_float('FACTOR', above=0.)
         self._set_rd(self.base_rd * factor)
+        rd, _ = self.feeder.extruder_stepper.stepper.get_rotation_distance()
         gcmd.respond_info(
             "Buffer %s  rotation_distance=%.6f  factor=%.4f"
-            % (self.name, self.feeder.extruder_stepper.stepper.rotation_dist, factor))
+            % (self.name, rd, factor))
 
     def cmd_SET_BUFFER_MULTIPLIER(self, gcmd):
         which  = gcmd.get('MULTIPLIER').upper()
@@ -254,6 +261,14 @@ class BelaySensorBuffer(_BufferBase):
 
     def __init__(self, config):
         super().__init__(config)
+
+        # _BufferBase defaults self.state to 'neutral', which is a real
+        # dead-zone state for DualSensorBuffer but not a state this class
+        # ever sets itself - a single switch only ever reports 'advancing'
+        # or 'trailing'. Overriding it here so QUERY_BUFFER/debug_console
+        # can't imply a third physical position exists before the first
+        # sensor read arrives.
+        self.state = 'unknown'
 
         self.sensor_pin = config.get('sensor_pin')
         self.invert     = config.getboolean('invert_sensor', False)

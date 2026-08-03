@@ -116,6 +116,64 @@ to `moonraker.conf` covering whichever components you installed, so a `git
 pull` on this repo updates all of them together. Spoolman Lane Sync gets
 registered in `moonraker.asvc` so Moonraker is allowed to manage its service.
 
+## Calibrating the Feeders
+
+Each tool's feeder stepper has its own `rotation_distance` in `feeder.cfg`
+(`[extruder_stepper _tool{n}_feeder]`) — how far it actually pushes filament
+per motor rotation. If it's off, the buffer sync fights a constant bias
+instead of correcting for real slack: `feeder_buffer`'s live `debug_console`
+output (see below) can end up pinned on one state the entire print instead
+of oscillating, because it's compensating for a miscalibrated base rate
+rather than genuine feed/draw drift.
+
+To calibrate tool `N`'s feeder independently of the toolhead extruder it's
+synced to:
+
+1. Make sure `[force_move] enable_force_move: True` is set somewhere in your
+   config (required for the command below — Klipper won't run it otherwise).
+2. Mark the filament with a pen right where it enters the feeder body (not
+   at the hotend — you're measuring the feeder's own output).
+3. Run a slow, known-distance test move on just that feeder stepper:
+
+   ```
+   FORCE_MOVE STEPPER="extruder_stepper _tool{N}_feeder" DISTANCE=100 VELOCITY=5
+   ```
+
+   The quotes around `STEPPER=` are required — the value contains a space,
+   and Klipper's gcode parser splits on whitespace otherwise.
+4. Measure how far the mark actually moved past your reference point.
+5. Recalculate: `new_rotation_distance = old_rotation_distance * (measured_mm / 100)`.
+6. Update `rotation_distance` for that tool in `feeder.cfg` and `RESTART`
+   (a plain config edit doesn't take effect until Klipper reloads — or test
+   live first with `SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=_tool{N}_feeder
+   DISTANCE=<value>`, which applies immediately without a restart).
+
+Repeat the measurement afterward to confirm it lands close to 100mm.
+
+## Debugging a Buffer
+
+`feeder_buffer`'s `debug_console` option (default `True`, see
+`src/printer/feeder_buffer_spec.md`) prints every state change
+(`Buffer T0: neutral -> advancing`, etc.) to the console, so you can confirm
+a buffer is actually reacting to filament movement rather than just trusting
+it silently. If it's pinned on one state indefinitely:
+
+- Check with the printer idle first — if it's already pinned with no
+  filament moving at all, that's a mechanical issue (spring tension, switch
+  position), not a feed-rate one.
+- If it only pins during printing, recalibrate that tool's `rotation_distance`
+  (above) before assuming a sensor/wiring problem.
+- If it's pinned on the *same* state no matter what you change the base
+  calibration to — including deliberately making the mismatch worse — check
+  `invert_sensor` (single-sensor mode only). If the sensor's active/inactive
+  reading is backwards from what the code expects, the correction reinforces
+  the drift instead of fixing it, so it never crosses back to the other
+  state. Toggling `invert_sensor: True`/`False` for that tool flips which
+  state gets the speed-up vs. slow-down correction.
+
+Set `debug_console: False` per-tool once you've confirmed it's behaving, to
+keep the console quiet during real prints.
+
 ## Credits
 
 See [CREDITS.md](CREDITS.md) for full attribution.

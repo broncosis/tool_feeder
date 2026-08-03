@@ -27,3 +27,7 @@ debug_console: True
 # multiplier_high: 1.05
 # multiplier_low: 0.95
 # debug_console: True
+# If debug_console shows it pinned on one state no matter what you do to
+# rotation_distance, try invert_sensor: True - see README's "Debugging a
+# Buffer" section.
+# invert_sensor: False
