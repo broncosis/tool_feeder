@@ -121,6 +121,7 @@ pause_on_runout: FALSE
 runout_gcode:
   SET_TOOL_FILAMENT_STATUS T=@@N@@ HAS_FILAMENT=0
   M118 Runout sensor T@@N@@ reports: Runout
+  FAILOVER_CHECK T=@@N@@
 insert_gcode:
   SET_TOOL_FILAMENT_STATUS T=@@N@@ HAS_FILAMENT=1
   M118 Runout sensor T@@N@@ reports: Filament Detected

@@ -130,6 +130,13 @@ class Panel(ScreenPanel):
             + _("Green/red box = filament OK/OUT  ·  ")
             + _("blue arc above = maps to  ·  ")
             + _("orange dashed arc below = backup")
+            + "\n"
+            # Backups are keyed to the tool being CALLED, not the tool it
+            # maps to - e.g. if T0 maps to T3, T3 running out needs the
+            # backup set on T0's own routing page, not T3's. Cheap fix for
+            # now (surface the gotcha) rather than redesigning the routing
+            # picker itself - see .claude/CONTEXT.md for the fuller writeup.
+            + _("Backup is set on the tool you call, not the tool it maps to")
             + "</small>"
         )
         # set_line_wrap(True) alone doesn't actually wrap: a Gtk.Label still
