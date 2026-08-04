@@ -23,6 +23,13 @@
 - **License:** Unknown — used with explicit permission from the author
 - **Used for:** The tip-forming wiggle sequence in `UNLOAD_ANY_TOOL` is based on `_SIFM_LOAD_FINISH` from SIFM.
 
+### N3MI-DG — Prime Lines Macro
+- **Source:** No public repo/link — direct community sharing
+- **License:** Unknown — used with explicit permission from the author
+- **Used for:** `prime_purge.cfg`'s `PRIME_PURGE` macro (per-tool prime/purge
+  sequence run at print start) started from N3MI-DG's prime lines macro,
+  since heavily modified — only loosely based on the original at this point.
+
 ### Nic335 — Tool Router
 - **Source:** https://github.com/nic335
 - **License:** Unknown — used with explicit permission from the author
