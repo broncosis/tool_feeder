@@ -489,6 +489,7 @@ install_feeder() {
     rm -f "$feeder_tmp"
 
     copy_with_prompt "$PRINTER_SRC/tool_feeder_macros.cfg" "$CONFIG_DIR"
+    copy_with_prompt "$PRINTER_SRC/prime_purge.cfg" "$CONFIG_DIR"
 
     # ---- Generate T0.cfg .. T{n-1}.cfg from tool.cfg.template ----
     local n_suffix tool_tmp
@@ -525,6 +526,9 @@ install_feeder() {
     echo "      generated, only one should ever be active at a time"
     echo "    - [include feeder.cfg] in printer.cfg (it pulls in tool_feeder_macros.cfg itself)"
     echo "    - [include T0.cfg] etc. for each tool"
+    echo "    - [include prime_purge.cfg] and call PRIME_PURGE from your slicer's"
+    echo "      start gcode (or your own print-start macro) - requires"
+    echo "      klipper-toolchanger, same as the generated T{n}.cfg files"
 }
 
 _install_buffer_extra() {
