@@ -484,7 +484,7 @@ install_feeder() {
     sed "s|@@LOAD_TEMP@@|$load_temp|g; s|@@SPOOLMAN_ENABLED@@|$spoolman_enabled|g" \
         "$PRINTER_SRC/feeder_vars.cfg.template" >> "$feeder_tmp"
 
-    log_info "Generating config for $num_tools tool(s) in $CONFIG_DIR:"
+    log_info "Generating feeder.cfg in $CONFIG_DIR:"
     write_generated_with_prompt "$feeder_tmp" "$CONFIG_DIR/feeder.cfg"
     rm -f "$feeder_tmp"
 
@@ -492,14 +492,20 @@ install_feeder() {
     copy_with_prompt "$PRINTER_SRC/prime_purge.cfg" "$CONFIG_DIR"
 
     # ---- Generate T0.cfg .. T{n-1}.cfg from tool.cfg.template ----
-    local n_suffix tool_tmp
+    # Written under toolchanger/tools/, matching klipper-toolchanger's own
+    # example layout (config/toolchanger/tools/T0.cfg, ...) rather than
+    # dumped flat into CONFIG_DIR - so [include toolchanger/tools/T0.cfg]
+    # matches where real installs actually keep them.
+    local n_suffix tool_tmp tools_dir
+    tools_dir="$CONFIG_DIR/toolchanger/tools"
+    log_info "Generating $num_tools tool config(s) in $tools_dir:"
     for (( n = 0; n < num_tools; n++ )); do
         n_suffix=""
         [ "$n" -gt 0 ] && n_suffix="$n"
         tool_tmp="$(mktemp /tmp/tool_feeder_toolcfg_XXXXXX)"
         sed "s|@@N@@|$n|g; s|@@N_SUFFIX@@|$n_suffix|g" \
             "$PRINTER_SRC/tool.cfg.template" > "$tool_tmp"
-        write_generated_with_prompt "$tool_tmp" "$CONFIG_DIR/T$n.cfg"
+        write_generated_with_prompt "$tool_tmp" "$tools_dir/T$n.cfg"
         rm -f "$tool_tmp"
     done
 
@@ -514,7 +520,7 @@ install_feeder() {
     echo ""
     echo "  Next steps:"
     echo "    - Find every CHANGE_ME_* placeholder and fill it in to match your"
-    echo "      wiring: grep -rn CHANGE_ME_ $CONFIG_DIR/feeder.cfg $CONFIG_DIR/T*.cfg"
+    echo "      wiring: grep -rn CHANGE_ME_ $CONFIG_DIR/feeder.cfg $tools_dir/T*.cfg"
     echo "      (per-tool pins, TMC UART pins, canbus_uuid, dock park position,"
     echo "      input shaper tuning — all unique per build, can't be auto-filled)"
     echo "    - Purge bucket position defaulted to bucket_x=25/bucket_y=-4, and"
@@ -525,7 +531,7 @@ install_feeder() {
     echo "      [feeder_buffer] block in feeder.cfg for that tool — both are"
     echo "      generated, only one should ever be active at a time"
     echo "    - [include feeder.cfg] in printer.cfg (it pulls in tool_feeder_macros.cfg itself)"
-    echo "    - [include T0.cfg] etc. for each tool"
+    echo "    - [include toolchanger/tools/T0.cfg] etc. for each tool"
     echo "    - [include prime_purge.cfg] and call PRIME_PURGE from your slicer's"
     echo "      start gcode (or your own print-start macro) - requires"
     echo "      klipper-toolchanger, same as the generated T{n}.cfg files"

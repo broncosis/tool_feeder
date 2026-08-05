@@ -73,11 +73,13 @@ components to install, and — for Filament Feeder — asks about your setup:
   macro instead)
 - Feeder MCU — picked from detected `/dev/serial/by-id/*` devices
 
-From your answers it **generates** `feeder.cfg` and one `T0.cfg`..`T{n-1}.cfg`
-per tool, instead of shipping static examples you'd otherwise hand-copy per
-tool. A couple of things default to reasonable values instead of being asked
-outright — edit them afterward if yours differ: purge bucket position
-(`bucket_x=25`, `bucket_y=-4`) and Bowden tube length (1400mm).
+From your answers it **generates** `feeder.cfg` (in your config directory
+root) and one `T0.cfg`..`T{n-1}.cfg` per tool (in `toolchanger/tools/`,
+matching klipper-toolchanger's own example layout), instead of shipping
+static examples you'd otherwise hand-copy per tool. A couple of things
+default to reasonable values instead of being asked outright — edit them
+afterward if yours differ: purge bucket position (`bucket_x=25`,
+`bucket_y=-4`) and Bowden tube length (1400mm).
 
 The buffer sync module defaults to two-sensor mode (adds jam detection). If
 your hardware only has one sensor, each tool's generated config already
@@ -89,7 +91,7 @@ UUIDs, dock park position, input shaper tuning — comes out as clearly marked
 `CHANGE_ME_*` placeholders. Find them all with:
 
 ```bash
-grep -rn CHANGE_ME_ ~/printer_data/config/feeder.cfg ~/printer_data/config/T*.cfg
+grep -rn CHANGE_ME_ ~/printer_data/config/feeder.cfg ~/printer_data/config/toolchanger/tools/T*.cfg
 ```
 
 Re-running the installer never silently overwrites `feeder.cfg` or a `T{n}.cfg`
