@@ -30,7 +30,11 @@ def fetch_toolmap_state(screen, callback):
     Calls callback(map_dict, backup_map_dict, filament_status_dict) — all
     three empty dicts on failure, so callers don't need to special-case None.
     """
-    result = screen.restApi.send_request(
+    # Attribute name was renamed apiclient -> restApi upstream at some point;
+    # support both so this doesn't break on older KlipperScreen installs
+    # that predate the rename.
+    api = getattr(screen, "restApi", None) or screen.apiclient
+    result = api.send_request(
         "printer/objects/query?gcode_macro%20_TOOLMAP"
     )
     if not result or not isinstance(result, dict) or "status" not in result:

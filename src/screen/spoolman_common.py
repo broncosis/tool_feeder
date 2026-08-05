@@ -1,4 +1,4 @@
-# spoolman_common.py — shared Spoolman spool-field extraction.
+# spoolman_common.py — shared Spoolman helpers.
 #
 # filament_lanes.py and filament_lanes_spoolman.py each independently pulled
 # the same fields out of a raw Spoolman spool dict (name, material, vendor,
@@ -10,6 +10,22 @@
 # What's NOT here: how each panel consumes color_hex differs (filament_lanes.py
 # substitutes it into an SVG string, filament_lanes_spoolman.py parses it into
 # RGB floats for a Cairo swatch draw) — that stays in each panel file.
+
+import inspect
+
+
+def load_all_spools(screen, callback):
+    """Fetch the full spool list, tolerating both known
+    SpoolmanAPI.load_all_spools() signatures — some KlipperScreen versions
+    are async (accept callback=, return None immediately, the real list
+    arrives later via the callback), older ones are synchronous (no
+    callback param, return the list directly). callback(spools) is always
+    invoked exactly once either way."""
+    api = screen.spoolman_api
+    if "callback" in inspect.signature(api.load_all_spools).parameters:
+        api.load_all_spools(callback=callback)
+    else:
+        callback(api.load_all_spools())
 
 
 def extract_spool_fields(spool):

@@ -4,7 +4,7 @@ from gi.repository import Gtk, GLib
 import logging
 
 from panels.base_panel import ScreenPanel
-from panels.spoolman_common import extract_spool_fields
+from panels.spoolman_common import extract_spool_fields, load_all_spools
 from panels.sidebar_declutter import hide_extra_icons, show_extra_icons, add_toolmap_button
 
 logger = logging.getLogger("KlipperScreen")
@@ -126,9 +126,6 @@ class Panel(ScreenPanel):
     # ------------------------------------------------------------------ #
 
     def _fetch_spools(self):
-        # load_all_spools() is async (a Moonraker JSON-RPC call under the
-        # hood) — it returns immediately with None, the real list arrives
-        # later via this callback.
         def _handle_spools(spools):
             if not spools or not isinstance(spools, list):
                 logger.warning("filament_lanes_spoolman: spool fetch returned nothing")
@@ -137,7 +134,7 @@ class Panel(ScreenPanel):
             self.spools = spools
             GLib.idle_add(self._populate_list)
 
-        self._screen.spoolman_api.load_all_spools(callback=_handle_spools)
+        load_all_spools(self._screen, _handle_spools)
 
     def _populate_list(self):
         self._listbox.remove(self._spinner_row)

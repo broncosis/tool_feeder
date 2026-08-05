@@ -5,7 +5,7 @@ import logging
 import os
 
 from panels.base_panel import ScreenPanel
-from panels.spoolman_common import extract_spool_fields
+from panels.spoolman_common import extract_spool_fields, load_all_spools
 from panels.sidebar_declutter import hide_extra_icons, show_extra_icons, add_toolmap_button
 
 logger = logging.getLogger("KlipperScreen")
@@ -152,7 +152,11 @@ class Panel(ScreenPanel):
 
         # Fetch save_variables + toolchanger state via synchronous REST.
         # KlipperScreen uses the same pattern for its own periodic fetches.
-        result = self._screen.restApi.send_request(
+        # Attribute name was renamed apiclient -> restApi upstream at some
+        # point; support both so this doesn't break on older KlipperScreen
+        # installs that predate the rename.
+        api = getattr(self._screen, "restApi", None) or self._screen.apiclient
+        result = api.send_request(
             "printer/objects/query?save_variables&toolchanger"
         )
         variables = {}
@@ -217,9 +221,6 @@ class Panel(ScreenPanel):
                 self._update_all_lanes()
 
         if spool_ids:
-            # load_all_spools() is async (a Moonraker JSON-RPC call under the
-            # hood) — it returns immediately with None, the real list arrives
-            # later via this callback.
             def _handle_spools(spools):
                 resolved = set()
                 if spools and isinstance(spools, list):
@@ -239,7 +240,7 @@ class Panel(ScreenPanel):
                         resolved.add(n)
                 _apply_manual_fallback(resolved)
 
-            self._screen.spoolman_api.load_all_spools(callback=_handle_spools)
+            load_all_spools(self._screen, _handle_spools)
         else:
             _apply_manual_fallback(set())
 
