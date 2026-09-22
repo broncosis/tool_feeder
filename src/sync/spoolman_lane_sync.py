@@ -9,9 +9,13 @@ Works with toolchangers (KTC, StealthChanger), IDEX, and any
 multi-extruder Klipper setup. Hands off automatically if Happy Hare
 or AFC is already managing lane_data.
 
+Spoolman itself is never contacted directly — all Spoolman API calls go
+through Moonraker's /server/spoolman/proxy endpoint, so the Spoolman URL
+is whatever Moonraker's own [spoolman] config section says it is. This
+means there's nothing here to go stale if that URL ever changes.
+
 Config (environment variables or .env file next to this script):
   MOONRAKER_URL      Moonraker base URL    (default: http://localhost:7125)
-  SPOOLMAN_URL       Spoolman base URL     (default: http://localhost:7912)
   MOONRAKER_API_KEY  Optional API key      (if Moonraker auth is enabled)
   LOG_LEVEL          Logging verbosity     (default: INFO)
 """
@@ -62,11 +66,9 @@ class SpoolmanLaneSync:
     def __init__(
         self,
         moonraker_url: str,
-        spoolman_url: str,
         api_key: str = "",
     ) -> None:
         self._moonraker = moonraker_url.rstrip("/")
-        self._spoolman  = spoolman_url.rstrip("/")
         self._mr_headers: dict[str, str] = (
             {"X-Api-Key": api_key} if api_key else {}
         )
@@ -74,7 +76,10 @@ class SpoolmanLaneSync:
     # ── Entry point ────────────────────────────────────────────────────────────
 
     async def run(self) -> None:
-        LOG.info("Moonraker: %s  |  Spoolman: %s", self._moonraker, self._spoolman)
+        LOG.info(
+            "Moonraker: %s  |  Spoolman: via Moonraker's /server/spoolman/proxy",
+            self._moonraker,
+        )
 
         await self._wait_for_moonraker()
 
@@ -199,12 +204,7 @@ class SpoolmanLaneSync:
         tool_map: dict[int, dict] = {}
         for tool_num, spool_id in assignments.items():
             try:
-                async with aiohttp.ClientSession() as s:
-                    async with s.get(
-                        f"{self._spoolman}/api/v1/spool/{spool_id}",
-                        raise_for_status=True,
-                    ) as resp:
-                        spool = await resp.json()
+                spool = await self._spoolman_request("GET", f"/v1/spool/{spool_id}")
                 tool_map[tool_num] = _spool_to_lane(spool)
             except Exception as exc:
                 LOG.warning("Could not fetch spool %d for T%d: %s", spool_id, tool_num, exc)
@@ -224,13 +224,9 @@ class SpoolmanLaneSync:
     async def _tool_map_from_locations(self) -> dict[int, dict]:
         """Fallback: match active spools by Spoolman Location = T0/T1/…"""
         try:
-            async with aiohttp.ClientSession() as s:
-                async with s.get(
-                    f"{self._spoolman}/api/v1/spool",
-                    params={"allow_archived": "false"},
-                    raise_for_status=True,
-                ) as resp:
-                    spools: list[dict] = await resp.json()
+            spools: list[dict] = await self._spoolman_request(
+                "GET", "/v1/spool", query="allow_archived=false"
+            )
         except Exception as exc:
             LOG.warning("Could not fetch spools from Spoolman: %s", exc)
             return {}
@@ -357,6 +353,28 @@ class SpoolmanLaneSync:
             if isinstance(params, list) and params and "save_variables" in params[0]:
                 LOG.debug("save_variables changed — re-syncing")
                 await self._sync()
+
+    # ── Spoolman (via Moonraker's proxy) ───────────────────────────────────────
+
+    async def _spoolman_request(
+        self, method: str, path: str, query: str | None = None
+    ) -> Any:
+        """Call the Spoolman API through Moonraker's /server/spoolman/proxy,
+        rather than talking to Spoolman directly — Moonraker already knows
+        Spoolman's real address from its own [spoolman] config, so this can
+        never point at a stale/wrong host the way a separately-configured
+        SPOOLMAN_URL could."""
+        body: dict[str, Any] = {"request_method": method, "path": path}
+        if query is not None:
+            body["query"] = query
+        async with aiohttp.ClientSession(headers=self._mr_headers) as s:
+            async with s.post(
+                f"{self._moonraker}/server/spoolman/proxy",
+                json=body,
+                raise_for_status=True,
+            ) as resp:
+                data = await resp.json()
+                return data.get("result")
 
     # ── Moonraker database ─────────────────────────────────────────────────────
 
@@ -490,7 +508,6 @@ def main() -> None:
 
     service = SpoolmanLaneSync(
         moonraker_url = os.getenv("MOONRAKER_URL", "http://localhost:7125"),
-        spoolman_url  = os.getenv("SPOOLMAN_URL",  "http://localhost:7912"),
         api_key       = os.getenv("MOONRAKER_API_KEY", ""),
     )
 

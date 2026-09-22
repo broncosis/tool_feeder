@@ -148,25 +148,6 @@ detect_klipperscreen_dir() {
     done
 }
 
-# Parses the `server` key out of the [spoolman] section of a moonraker.conf
-# candidate. Prints nothing if not found.
-parse_spoolman_url() {
-    local config_dir="$1" candidate
-    for candidate in "$config_dir/moonraker.conf" "$HOME/printer_data/config/moonraker.conf" \
-                      "$HOME/klipper_config/moonraker.conf" "/etc/moonraker.conf"; do
-        [ -f "$candidate" ] || continue
-        awk '
-            /^\[spoolman\]/ { insection=1; next }
-            /^\[/ { insection=0 }
-            insection && /^[[:space:]]*server[[:space:]]*[:=]/ {
-                sub(/^[[:space:]]*server[[:space:]]*[:=][[:space:]]*/, "");
-                print;
-                exit
-            }
-        ' "$candidate" && return
-    done
-}
-
 # Lists /dev/serial/by-id/* devices and lets the user pick one, or enter a
 # path manually if none are found / none match. All display output goes to
 # stderr so this is safe to call as `var="$(_pick_serial_device)"`.
@@ -636,11 +617,8 @@ _lane_sync_write_env() {
         return
     fi
 
-    local detected moonraker_url spoolman_url api_key
-    detected="$(parse_spoolman_url "$CONFIG_DIR")"
-
+    local moonraker_url api_key
     moonraker_url="$(ask "Moonraker URL" "http://localhost:7125")"
-    spoolman_url="$(ask "Spoolman URL" "${detected:-http://localhost:7912}")"
     api_key="$(ask "Moonraker API key (blank if auth is off)" "")"
 
     if [ "${DRY_RUN:-0}" = "1" ]; then
@@ -653,7 +631,6 @@ _lane_sync_write_env() {
 # Edit these values to match your setup, then: sudo systemctl restart spoolman-lane-sync
 
 MOONRAKER_URL=${moonraker_url}
-SPOOLMAN_URL=${spoolman_url}
 MOONRAKER_API_KEY=${api_key}
 LOG_LEVEL=INFO
 ENVEOF
