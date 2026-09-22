@@ -237,7 +237,12 @@ class Panel(ScreenPanel):
         self._assign(row._spool_id)
 
     def _on_clear(self, widget):
-        self._assign(0)  # 0 = no spool assigned
+        # UNASSIGN_SPOOL (tool_feeder_macros.cfg) clears spool_id AND
+        # t{n}__manual in one call — same net effect _assign(0) had, now
+        # also available from the console.
+        script = f"UNASSIGN_SPOOL T={self.lane}"
+        self._screen._send_action(None, "printer.gcode.script", {"script": script})
+        self._screen._menu_go_back()
 
     def _on_routing_clicked(self, widget):
         self._screen.show_panel(

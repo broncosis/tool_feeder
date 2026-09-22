@@ -120,6 +120,7 @@ switch_pin: CHANGE_ME_t@@N@@_filament_sensor_pin
 pause_on_runout: FALSE
 runout_gcode:
   SET_TOOL_FILAMENT_STATUS T=@@N@@ HAS_FILAMENT=0
+  UNASSIGN_SPOOL T=@@N@@
   M118 Runout sensor T@@N@@ reports: Runout
   FAILOVER_CHECK T=@@N@@
 insert_gcode:

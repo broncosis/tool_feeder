@@ -300,7 +300,11 @@ class Panel(ScreenPanel):
     # ------------------------------------------------------------------ #
 
     def _on_clear(self, widget):
-        script = f"SAVE_VARIABLE VARIABLE=t{self.lane}__manual VALUE=None"
+        # UNASSIGN_SPOOL (tool_feeder_macros.cfg) clears t{n}__manual AND
+        # spool_id in one call. Previously this only cleared t{n}__manual,
+        # leaving a stale t{n}__spool_id/live spool_id behind if this lane
+        # had ever been Spoolman-assigned before switching to manual.
+        script = f"UNASSIGN_SPOOL T={self.lane}"
         self._screen._send_action(None, "printer.gcode.script", {"script": script})
         self._screen._menu_go_back()
 
