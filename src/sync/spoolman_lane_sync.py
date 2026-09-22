@@ -49,6 +49,7 @@ _EMPTY_SLOT: dict[str, Any] = {
     "material": "", "color": "", "vendor": "", "filament_id": ""
 }
 _VAR_RE          = re.compile(r"^t(\d+)__spool_id$", re.IGNORECASE)
+_MANUAL_VAR_RE   = re.compile(r"^t(\d+)__manual$", re.IGNORECASE)
 _LOC_RE          = re.compile(r"^[Tt](\d+)$")
 _RECONNECT_INIT  = 2.0
 _RECONNECT_MAX   = 60.0
@@ -148,7 +149,13 @@ class SpoolmanLaneSync:
     # ── Primary source: Klipper save_variables ─────────────────────────────────
 
     async def _tool_map_from_variables(self) -> dict[int, dict]:
-        """Read t{n}__spool_id from save_variables, fetch each spool from Spoolman."""
+        """Read t{n}__spool_id from save_variables (primary, resolved via a
+        Spoolman lookup), falling back to t{n}__manual — written by
+        KlipperScreen's Manual Entry path (filament_lanes_manual.py) for
+        lanes with no Spoolman spool — for any tool not covered by a real
+        spool_id. Without this fallback, a manually-assigned lane always
+        synced as an empty slot, since this function only ever looked for
+        t{n}__spool_id."""
         try:
             async with aiohttp.ClientSession(headers=self._mr_headers) as s:
                 async with s.get(
@@ -169,15 +176,22 @@ class SpoolmanLaneSync:
         )
 
         assignments: dict[int, int] = {}
+        manual_entries: dict[int, dict] = {}
         for key, val in variables.items():
             m = _VAR_RE.match(key)
             if m:
                 try:
-                    assignments[int(m.group(1))] = int(val)
+                    spool_id = int(val)
+                    if spool_id > 0:  # 0 = unassigned, see UNASSIGN_SPOOL/_assign(0)
+                        assignments[int(m.group(1))] = spool_id
                 except (TypeError, ValueError):
                     pass
+                continue
+            m = _MANUAL_VAR_RE.match(key)
+            if m and isinstance(val, dict):
+                manual_entries[int(m.group(1))] = val
 
-        if not assignments:
+        if not assignments and not manual_entries:
             return {}
 
         LOG.debug("save_variables spool assignments: %s", assignments)
@@ -194,6 +208,14 @@ class SpoolmanLaneSync:
                 tool_map[tool_num] = _spool_to_lane(spool)
             except Exception as exc:
                 LOG.warning("Could not fetch spool %d for T%d: %s", spool_id, tool_num, exc)
+
+        # Manual entries fill in any tool not already resolved via a real
+        # spool_id — same "spool wins if both are somehow set" precedence
+        # filament_lanes.py's own _fetch_data uses for display.
+        for tool_num, entry in manual_entries.items():
+            if tool_num in tool_map:
+                continue
+            tool_map[tool_num] = _manual_to_lane(entry)
 
         return tool_map
 
@@ -416,6 +438,24 @@ def _spool_to_lane(spool: dict) -> dict:
         "setting_id":       _extra_str(extra, "orca_setting_id"),
         "name":             filament.get("name") or "",
         "remaining_weight": spool.get("remaining_weight"),
+    }
+
+
+def _manual_to_lane(entry: dict) -> dict:
+    """Build a lane_data entry from a t{n}__manual save_variables dict (see
+    filament_lanes_manual.py's _on_save) — same output shape _spool_to_lane
+    produces from a real Spoolman spool, minus fields a manual entry has no
+    source for (vendor, the two OrcaSlicer/Spoolman auto-link ids,
+    remaining_weight)."""
+    color_hex = (entry.get("color") or "").replace("#", "").upper()
+    return {
+        "material":         entry.get("material") or "",
+        "color":            color_hex,
+        "vendor":           "",
+        "filament_id":      "",
+        "setting_id":       "",
+        "name":             entry.get("name") or "",
+        "remaining_weight": None,
     }
 
 
