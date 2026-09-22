@@ -111,7 +111,10 @@ choice between the two, per lane.
 Every lane also has a **Map / Failover** page for tool remapping (e.g. route
 T1 to T3 if T1 runs out) and backup-tool assignment, plus a **Tool Map**
 overview reachable from the sidebar of any Filament screen, showing every
-tool's current mapping and backup at a glance.
+tool's current mapping and backup at a glance. The Filament panel is added to
+both of KlipperScreen's menus — the idle main menu and the printing-status
+page's own menu — so remapping/failover stays reachable mid-print, not just
+when idle.
 
 The installer also offers to add a single `[update_manager tool_feeder]` entry
 to `moonraker.conf` covering whichever components you installed, so a `git
