@@ -1,0 +1,6 @@
+* text=auto eol=lf
+
+# CAD/hardware reference files: leave line endings untouched — no
+# functional benefit to normalizing them, and STEP files in particular
+# are large enough that renormalizing would produce a huge, useless diff.
+hardware/** -text
